@@ -5,9 +5,9 @@ IBUSXMLDIR = /usr/share/ibus/component
 PKGBINDIR  = /usr/lib/ibus
 PKGDATADIR = /usr/share/ibus-sogoupycc
 
-#CFLAGS	=	-Wall -c -O3 `pkg-config --cflags ibus-1.0` -DPKGDATADIR='"$(PKGDATADIR)"' 
-# uncomment following if you want to use doublepinyin all the time:
-CFLAGS	=	-Wall -c -O3 -DALWAYS_USE_DOUBLEPINYIN `pkg-config --cflags ibus-1.0` -DPKGDATADIR='"$(PKGDATADIR)"'
+CFLAGS	=	-Wall -c -O3 `pkg-config --cflags ibus-1.0` -DPKGDATADIR='"$(PKGDATADIR)"' 
+# comment above and uncomment following if you want to use doublepinyin all the time:
+# CFLAGS	=	-Wall -c -O3 -DALWAYS_USE_DOUBLEPINYIN `pkg-config --cflags ibus-1.0` -DPKGDATADIR='"$(PKGDATADIR)"'
 
 APP		=	ibus-sogoupycc
 CC		=	gcc
