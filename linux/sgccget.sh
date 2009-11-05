@@ -5,7 +5,7 @@
 # Licence: GPLv2
 
 py=`echo $@ | sed "s# #'#g;s#[^a-z']##g;s#''#'#g"`
-res=`wget -qO - --timeout 5 -t 3 "http://web.pinyin.sogou.com/web_ime/get_ajax/${py:-kongbai}.key"`
+res=`wget -qO - --timeout 12 -t 4 "http://web.pinyin.sogou.com/web_ime/get_ajax/${py:-kongbai}.key"`
 
 if [ $? -eq 0 ]; then
 {

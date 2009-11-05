@@ -14,7 +14,7 @@ CC		=	gcc
 LDFLAGS	=	`pkg-config --libs ibus-1.0` -lpthread
 SRCS	=	doublepinyin_scheme.c engine.c sogoupycc.c main.c
 OBJS	=	$(SRCS:.c=.o)
-INSTALL = /bin/install -c
+INSTALL = install -c
 
 all: $(APP) sogoupycc.xml
 
