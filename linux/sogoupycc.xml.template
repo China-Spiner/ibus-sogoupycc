@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- filename: sogoucc.xml -->
 <component>
-    <name>org.freedesktop.IBus.Sgpycc</name>
+    <name>org.freedesktop.IBus.sgpycc</name>
     <description>Sogou Pinyin Cloud</description>
-    <exec>_PKGBINDIR/ibus-sogoupycc --ibus</exec>
-    <version>0.0.1</version>
-    <author>Jun WU &lt;quark@lihdd.net&gt;</author>
+    <exec>@LIBEXEC_DIR@/ibus-sogoupycc --ibus</exec>
+    <version>@VERSION@</version>
+    <author>WU Jun &lt;quark@lihdd.net&gt;</author>
     <license>GPLv2</license>
     <homepage>http://lihdd.net</homepage>
     <textdomain>ibus-sgpycc</textdomain>
@@ -13,17 +13,17 @@
     <!-- for static engines -->
     <engines>
         <engine>
-            <name>Sgpycc</name>
+            <name>sgpycc</name>
             <language>zh_CN</language>
             <license>GPLv2</license>
-            <author>Jun WU &lt;quark@lihdd.net&gt;</author>
-            <icon>_PKGDATADIR/ibus-sogoupycc.png</icon>
-            <layout>us</layout>
-            <longname>Sogou Pinyin Cloud</longname>
+            <author>WU Jun &lt;quark@lihdd.net&gt;</author>
+            <icon>@PKGDATADIR@/icons/ibus-sogoupycc.png</icon>
+            <layout>en</layout>
+            <longname>Sogou Cloud</longname>
             <description>Sogou Pinyin Cloud Client</description>
             <locale name="zh_CN">
-                    <longname>搜狗云拼音</longname>
-                    <description>搜狗云拼音输入法</description>
+                    <longname>搜狗云输入法</longname>
+                    <description>搜狗云输入法</description>
             </locale>
             <rank>64</rank>
         </engine>
