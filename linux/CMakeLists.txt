@@ -1,0 +1,24 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+PROJECT(SGPYCC)
+ADD_SUBDIRECTORY(src bin)
+
+SET(VERSION "0.1.0")
+
+IF(NOT DEFINED LIBEXEC_DIR)
+  SET(LIBEXEC_DIR "${CMAKE_INSTALL_PREFIX}/libexec")
+ENDIF()
+
+IF(NOT DEFINED SHARE_INSTALL_PREFIX)
+  SET(PKGDATADIR "${CMAKE_INSTALL_PREFIX}/share/ibus-sogoupycc")
+ELSE()
+  SET(PKGDATADIR "${SHARE_INSTALL_PREFIX}/ibus-sogoupycc")
+ENDIF()
+
+CONFIGURE_FILE(sogoupycc.xml.template sogoupycc.xml)
+CONFIGURE_FILE("${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in" "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" IMMEDIATE @ONLY)
+
+ADD_CUSTOM_TARGET(uninstall "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake")
+
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/sogoupycc.xml DESTINATION share/ibus/component)
+INSTALL(FILES ibus-sogoupycc.png DESTINATION share/ibus-sogoupycc/icons)
+INSTALL(FILES config DESTINATION share/ibus-sogoupycc)

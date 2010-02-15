@@ -1,0 +1,185 @@
+-- ibus-sogoupycc 配置文件
+-- 此文件亦为 lua 脚本
+
+-- 若用户配置文件存在，则加载用户配置文件，不使用此文件
+-- 注意：把此配置文件当作用户配置时需要删除下面 3 行
+local userConfig = os.getenv('HOME')..'/.ibus/sgpycc/config'
+local file = io.open(userConfig, 'r')
+if file then file:close() dofile(userConfig) return end
+
+-- 设置双拼布局，使用 "-" 表示禁用
+pycc.setDoublePinyinScheme({
+	q = {"q", {"iu"}}, w = {"w", {"ia", "ua"}}, e = {"-", {"e"}}, r = {"r", {"uan", "er"}}, t = {"t", {"ve", "ue"}}, y = {"y", {"uai", "ing"}}, u = {"sh", {"u"}}, i = {"ch", {"i"}}, o = {"", {"o", "uo"}}, p = {"p", {"un"}},
+	a = {"-", {"a"}}, s = {"s", {"ong", "iong"}}, d = {"d", {"uang", "iang"}}, f = {"f", {"en"}}, g = {"g", {"eng"}}, h = {"h", {"ang"}}, j = {"j", {"an"}}, k = {"k", {"ao"}}, l = {"l", {"ai"}},
+	z = {"z", {"ei"}}, x = {"x", {"ie"}}, c = {"c", {"iao"}}, v = {"zh", {"ui", "v"}}, b = {"b", {"ou"}}, n = {"n", {"in"}}, m = {"m", {"ian"}},
+})
+
+-- 不输出任何调试信息
+pycc.DEBUG = 0
+
+-- 默认处于英文输入模式，使用左 Shift 键切换中英文模式，使用双拼
+-- 注释掉 requestCache 所在行禁用缓存，由于缓存是 per-session 且目前是只存在内存中的，所以用处不一定大
+conf = {
+	engMode = false,
+	engModeSwitchKey = key.Shift_L,
+	useDoublePinyin = false,
+	preedit = '',
+	requestCache = {},
+}
+
+-- 英文-中文标点映射表
+conf.puncMap = {
+	['.'] = '。', [','] = '，', ['^'] = '……', ['@'] = '＠', ['!'] = '！', ['~'] = '～',
+	['?'] = '？', ['#'] = '＃', ['$'] = '￥', ['&'] = '＆', ['('] = '（', [')'] = '）',
+	['{'] = '｛', ['}'] = '｝', ['['] = '［', [']'] = '］', [';'] = '；', [':'] = '：',
+	['<'] = '《', ['>'] = '》',
+	["'"] = { 2, '‘', '’'}, ['"'] = { 2, '“', '”'}
+}
+
+function notify(title, content)
+	content = content or ''
+	os.execute("notify-send '"..tostring(title).."' '"..tostring(content).."'")
+end
+
+function requestPreedit()
+	if pycc.preedit ~= '' then
+		pycc.request(pycc.preedit)
+		pycc.preedit = ''
+		conf.preedit = ''
+	end
+end
+
+-- 处理键盘事件
+-- param: int int int, return: boolean
+pycc.processkey = function(keyval, keycode, state)
+	-- 释放按键的事件，只检查是否是英文模式切换热键，否则不做处理
+	if pycc.keymask(state, key.RELEASE_MASK) then -- release a key
+		if conf.lastKeyval == keyval and keyval == conf.engModeSwitchKey then
+			conf.engMode = not conf.engMode
+			if conf.engMode then notify('已切换至英文模式') else notify('已切换至拼音模式') end
+		end
+		return false
+	end
+	conf.lastKeyval = keyval
+	-- 是否在此过程中处理过这个事件，不需其他程序处理
+	local handled = false
+	local keychr = ''
+	if keyval < 128 then keychr = string.char(keyval) end
+	-- 中文模式
+	if conf.engMode == false then
+		-- 是一个标点符号?
+		if conf.puncMap[keychr] then
+			local punc = conf.puncMap[keychr]
+			requestPreedit()
+			if type(punc) == 'string' then
+				-- 普通的标点
+				pycc.commit(punc)
+			else
+				-- 像引号那样可变的标点
+				pycc.commit(punc[punc[1]])
+				punc[1] = punc[1] + 1
+				if (punc[1] > #punc) then punc[1] = 2 end
+			end
+			handled = true
+		end
+		-- 退格
+		if keyval == key.BackSpace then
+			if #conf.preedit > 0 then
+				conf.preedit = conf.preedit:sub(1, #conf.preedit - 1) handled = true
+			elseif not pycc.isIdle() then
+				pycc.removeLastRequest() handled = true
+			end
+		end
+		-- ESC
+		if keyval == key.Escape then
+			if #conf.preedit > 0 then conf.preedit = '' handled = true end
+		end
+		-- 是一个拼音字符
+		if keychr >= 'a' and keychr <= 'z' then
+			if conf.useDoublePinyin then
+				if pycc.isValidDoublePinyin(conf.preedit .. keychr) then conf.preedit = conf.preedit .. keychr end
+			else
+				conf.preedit = conf.preedit .. keychr
+			end
+			handled = true
+		end
+		if conf.useDoublePinyin then
+			pycc.preedit = pycc.convertDoublePinyin(conf.preedit)
+		else
+			pycc.preedit = conf.preedit
+		end
+		if keychr == ' ' and pycc.preedit ~= '' then requestPreedit() handled = true end
+	end
+	-- 英文模式，或者处理中文模式未处理的键
+	if handled or pycc.isIdle() then
+		-- 可以将键盘事件转交其他程序
+		return handled
+	else
+		-- 拦截此事件
+		requestPreedit()
+		if keyval == key.Enter then keychr = '\n' end
+		pycc.commit(keychr)
+		return true
+	end
+	return handled
+end
+
+pcall (function() require 'luarocks.require' end)
+pcall (function() http = require 'socket.http' url = require 'socket.url' http.TIMEOUT = 6 http.USERAGENT =  "ibus-sogoupycc" end)
+
+-- 向云服务器请求
+-- param: string, return: string
+if http then
+	pycc.fetch = function(pinyin)
+		-- luaSocket 库可以使用，使用它完成任务
+		pinyin = pinyin:gsub(" ","'"):gsub("[^a-z']", '')
+		if (conf.requestCache) and conf.requestCache[pinyin] then return conf.requestCache[pinyin] end
+		local retry = 4
+		local ret, res
+		while retry > 0 do
+			ret, res = http.request('http://web.pinyin.sogou.com/web_ime/get_ajax/'..pinyin..'.key'), ''
+			if ret and ret:match('ime_query_res="([^"]*)"') then
+				res = url.unescape(ret:match('ime_query_res="([^"]*)"'))
+				if res then res = tostring(res:match('(.-)：')) end
+				if (conf.requestCache) then conf.requestCache[pinyin] = res end
+				break
+			else
+				retry = retry - 1
+				res = pinyin
+			end
+		end
+		--socket.sleep(math.random(20))
+		return res
+	end
+else
+	-- 否则使用外部脚本完成转换，这需要 wget 和 js 依赖
+	local file = io.open('/tmp/.sgccget.sh', 'w')
+	file:write([[#!/bin/bash
+py=`echo $@ | sed "s# #'#g;s#[^a-z']##g;s#''#'#g"`
+res=`wget -qO - --timeout 6 -t 4 "http://web.pinyin.sogou.com/web_ime/get_ajax/${py:-kongbai}.key"`
+if [ $? -eq 0 ]; then {
+js << !
+$res;
+function urldecode(utftext){var string="",i=c=c1=c2=0;
+while(i<utftext.length){c=utftext.charCodeAt(i);if(c<128){string+=String.fromCharCode(c);i++;}
+else if((c>191)&&(c<224)){c2=utftext.charCodeAt(i+1);string+=String.fromCharCode(((c&31)<<6)|(c2&63));
+i+=2;}else{c2=utftext.charCodeAt(i+1);c3=utftext.charCodeAt(i+2);
+string+=String.fromCharCode(((c&15)<<12)|((c2&63)<<6)|(c3&63));i+=3;}}return string;}
+print(urldecode(unescape(ime_query_res)));
+!
+} | while read i; do
+		if echo $i | fgrep '：' 1>/dev/null 2>/dev/null; then
+			echo -n $i | sed 's/：.*//';
+			exit;
+		fi
+	done
+else
+	echo -n "${py}"
+fi]])
+	file:close()
+	pycc.fetch = function(pinyin)
+		pinyin = pinyin:gsub(" ","'"):gsub("[^a-z']", '')
+		local content = io.popen("bash /tmp/.sgccget.sh '"..pinyin.."'")
+		return content:read("*line")
+	end
+end
