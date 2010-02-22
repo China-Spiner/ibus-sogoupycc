@@ -17,10 +17,16 @@
 
 #include "defines.h"
 #include "engine.h"
-#include "DoublePinyinScheme.h"
+#include "PinyinUtility.h"
 #include "PinyinCloudClient.h"
-#include "LuaIbusBinding.h"
+#include "LuaBinding.h"
 
+
+int globalDebugLevel = 0;
+char debugCurrentSourceFile[2048];
+int debugCurrentSourceLine;
+int debugCurrentThread;
+int mainThread;
 
 static IBusBus *bus = NULL; // Connect with IBus daemon.
 static IBusFactory *factory = NULL;
@@ -74,9 +80,27 @@ static void init(int mode) {
     g_object_unref(component);
 }
 
-int main(int argc, char const *argv[]) {
-    UNUSED(argv);
+void signalHandler(int signal) {
+    switch (signal) {
+        case SIGSEGV:
+            #ifdef DEBUG
+            fprintf(stderr, "segmentation fault in thread 0x%x (main thread: 0x%x)\nprogram possibly stopped at: %s Line %d, thread 0x%x.\n", (int)pthread_self(), mainThread, debugCurrentSourceFile, debugCurrentSourceLine, debugCurrentThread);
+            #else
+            fprintf(stderr, "segmentation fault\nno program possibly stop information.\nrecompile with -DDEBUG to get some useful information.");
+            #endif
+            fprintf(stderr, "  -- SIGSEGV handler\n");
+            fflush(stderr);
+            exit(EXIT_FAILURE);
+    }
+    
+}
 
+int main(int argc, char const *argv[]) {
+    mainThread = pthread_self();
+
+    
+    UNUSED(argv);
+    signal(SIGSEGV, signalHandler);
     // simple argc parser
     if (argc > 1) {
         init(2);
@@ -85,6 +109,8 @@ int main(int argc, char const *argv[]) {
     }
 
     ibus_main();
-
+    DEBUG_PRINT(1, "[MAIN] Exiting...\n");
+    
     return 0;
 }
+

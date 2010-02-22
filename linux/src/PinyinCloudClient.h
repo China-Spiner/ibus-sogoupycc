@@ -41,7 +41,7 @@ public:
     void readLock();
     void readUnlock();
     void request(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam);
-    void removeFirstRequest();
+    void removeFirstRequest(int count = 1);
     void removeLastRequest();
 
 private:

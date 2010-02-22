@@ -3,7 +3,7 @@
 <component>
     <name>org.freedesktop.IBus.sgpycc</name>
     <description>Sogou Pinyin Cloud</description>
-    <exec>@LIBEXEC_DIR@/ibus-sogoupycc --ibus</exec>
+    <exec>@PKGDATADIR@/engine/ibus-sogoupycc --ibus</exec>
     <version>@VERSION@</version>
     <author>WU Jun &lt;quark@lihdd.net&gt;</author>
     <license>GPLv2</license>

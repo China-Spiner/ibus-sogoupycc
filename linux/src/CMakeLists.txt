@@ -1,16 +1,12 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 
-IF(NOT DEFINED LIBEXEC_DIR)
-  SET(LIBEXEC_DIR "${CMAKE_INSTALL_PREFIX}/libexec")
-ENDIF()
-
 IF(NOT DEFINED SHARE_INSTALL_PREFIX)
   SET(PKGDATADIR "${CMAKE_INSTALL_PREFIX}/share/ibus-sogoupycc")
 ELSE()
   SET(PKGDATADIR "${SHARE_INSTALL_PREFIX}/ibus-sogoupycc")
 ENDIF()
 
-ADD_EXECUTABLE(ibus-sogoupycc DoublePinyinScheme.cpp;LuaIbusBinding.cpp;PinyinCloudClient.cpp;engine.cpp;main.cpp)
+ADD_EXECUTABLE(ibus-sogoupycc PinyinUtility.cpp;LuaBinding.cpp;PinyinCloudClient.cpp;engine.cpp;main.cpp)
 
 FIND_PACKAGE(PkgConfig)
 PKG_CHECK_MODULES(REQPKGS ibus-1.0>=1.2 lua>=5.1)
@@ -21,4 +17,4 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_DIR};${REQPKGS_INCLUDE_DIRS})
 LINK_DIRECTORIES(${REQPKGS_LIBRARY_DIRS})
 TARGET_LINK_LIBRARIES(ibus-sogoupycc ${REQPKGS_LIBRARIES})
 
-INSTALL(TARGETS ibus-sogoupycc DESTINATION ${LIBEXEC_DIR})
+INSTALL(TARGETS ibus-sogoupycc DESTINATION ${PKGDATADIR}/engine)

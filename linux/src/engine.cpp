@@ -8,24 +8,40 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <setjmp.h>
+#include <signal.h>
 #include "defines.h"
 #include "engine.h"
-#include "LuaIbusBinding.h"
+#include "LuaBinding.h"
 
 typedef struct _IBusSgpyccEngine IBusSgpyccEngine;
 typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
 
+using std::string;
+
 struct _IBusSgpyccEngine {
     IBusEngine parent;
+    gboolean enabled;
+    gboolean has_focus;
+
+    // cursor location
+    IBusRectangle cursor_area;
+    guint client_capabilities;
+
+    string* commitingCharacters;
     IBusLookupTable *table;
-    LuaIbusBinding* luaBinding;
+    LuaBinding* luaBinding;
     PinyinCloudClient* cloudClient;
-    pthread_mutex_t updatePreeditMutex;
+
+    pthread_mutex_t engineMutex;
     int cursorX, cursorY, cursorWidth, cursorHeight;
     int debugLevel;
-};
 
-#define ENGINE_DEBUG_PRINT(level, ...) if (engine->debugLevel >= level) fprintf(stderr, "[DEBUG%d] L%d: ",level,__LINE__),fprintf(stderr,__VA_ARGS__),fflush(stderr);
+    // full path of fetcher script
+    string* fetcherPath;
+    int fetcherBufferSize;
+    bool needUpdatePreedit;
+};
 
 struct _IBusSgpyccEngineClass {
     IBusEngineClass parent;
@@ -33,7 +49,11 @@ struct _IBusSgpyccEngineClass {
 
 static IBusEngineClass *parentClass = NULL;
 
-// init prototype
+// lock defines
+#define ENGINE_MUTEX_LOCK if (pthread_mutex_lock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex lock fail.\n"), exit(EXIT_FAILURE);
+#define ENGINE_MUTEX_UNLOCK if (pthread_mutex_unlock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex unlock fail.\n"), exit(EXIT_FAILURE);
+
+// init funcs
 static void engineClassInit(IBusSgpyccEngineClass *klass);
 static void engineInit(IBusSgpyccEngine *engine);
 static void engineDestroy(IBusSgpyccEngine *engine);
@@ -53,6 +73,8 @@ static void engineCursorUp(IBusSgpyccEngine *engine);
 static void engineCursorDown(IBusSgpyccEngine *engine);
 
 static void engineUpdatePreedit(IBusSgpyccEngine *engine);
+static void enginePendingUpdatePreedit(IBusSgpyccEngine *engine);
+static void engineProcessPendingActions(IBusSgpyccEngine *engine);
 
 // lua state to engine, to lookup IBusSgpyccEngine from a lua state
 static map<const lua_State*, IBusSgpyccEngine*> l2Engine;
@@ -62,6 +84,10 @@ static int l_commitText(lua_State* L);
 static int l_sendRequest(lua_State* L);
 static int l_isIdle(lua_State* L);
 static int l_removeLastRequest(lua_State* L);
+
+// fetch functions
+string directFunc(void* data, const string& requestString);
+string fetchFunc(void* data, const string& requestString);
 
 // entry function, indeed
 
@@ -115,13 +141,19 @@ static void engineClassInit(IBusSgpyccEngineClass *klass) {
 
 static void engineInit(IBusSgpyccEngine *engine) {
     // init mutex
-    if (pthread_mutex_init(&engine->updatePreeditMutex, NULL)) {
+    pthread_mutexattr_t engineMutexAttr;
+    pthread_mutexattr_init(&engineMutexAttr);
+    pthread_mutexattr_settype(&engineMutexAttr, PTHREAD_MUTEX_ERRORCHECK);
+
+    if (pthread_mutex_init(&engine->engineMutex, &engineMutexAttr)) {
         fprintf(stderr, "can't create mutex.\nprogram aborted.");
         exit(EXIT_FAILURE);
     }
 
+    pthread_mutexattr_destroy(&engineMutexAttr);
+
     // init lua binding
-    engine->luaBinding = new LuaIbusBinding();
+    engine->luaBinding = new LuaBinding();
     l2Engine[engine->luaBinding->getLuaState()] = engine;
 
     // add variables to lua
@@ -173,131 +205,180 @@ static void engineInit(IBusSgpyccEngine *engine) {
         exit(EXIT_FAILURE);
     }
 
-    // set debug level locally
-    engine->debugLevel = engine->luaBinding->getValue("DEBUG", 0);
+    // read in debug level globally
+    globalDebugLevel = engine->luaBinding->getValue("DEBUG", 0);
+    DEBUG_PRINT(1, "[ENGINE] Debug Level: %d\n", globalDebugLevel);
 
-    ENGINE_DEBUG_PRINT(1, "Init\n");
+    // read in external script path
+    engine->fetcherPath = new string(engine->luaBinding->getValue("fetcher", PKGDATADIR "/fetcher"));
+    engine->commitingCharacters = new string("wo men");
+    engine->fetcherBufferSize = engine->luaBinding->getValue("fetcherBufferSize", 1024);
+    engine->needUpdatePreedit = false;
 
     // init pinyin cloud client
     engine->cloudClient = new PinyinCloudClient();
+    DEBUG_PRINT(1, "[ENGINE] Init completed\n");
 }
 
 static void engineDestroy(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(1, "Destroy\n");
+    DEBUG_PRINT(1, "[ENGINE] Destroy\n");
     l2Engine.erase(engine->luaBinding->getLuaState());
     delete engine->luaBinding;
     delete engine->cloudClient;
-    pthread_mutex_destroy(&engine->updatePreeditMutex);
+    delete engine->fetcherPath;
+    delete engine->commitingCharacters;
+    pthread_mutex_destroy(&engine->engineMutex);
     IBUS_OBJECT_CLASS(parentClass)->destroy((IBusObject *) engine);
 }
 
 static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, guint32 keycode, guint32 state) {
-    ENGINE_DEBUG_PRINT(1, "ProcessKeyEvent(%d, %d, 0x%x)\n", keyval, keycode, state);
+    DEBUG_PRINT(1, "[ENGINE] ProcessKeyEvent(%d, %d, 0x%x)\n", keyval, keycode, state);
 
+    ENGINE_MUTEX_LOCK;
+    // if commitingCharacters is not empty, use internal handle process, otherwise call lua function
     int res;
-    switch (engine->luaBinding->callLuaFunction(false, "processkey", "ddd>b", keyval, keycode, state, &res)) {
-        case 0: // success
-            break;
-        case -1:
-            ENGINE_DEBUG_PRINT(1, "processkey(keyval, keycode, state) not found!\n");
-        default:
-            res = 0; // let other program handle this key
+    if (engine->commitingCharacters->length() > 0) {
+        // find a pinyin
+        string s = *(engine->commitingCharacters) + " ";
+        int spacePosition = s.find(' ');
+        // try parse that pinyin
+        string pinyin = s.substr(0, spacePosition);
+        if (PinyinUtility::isValidPinyin(pinyin)) {
+            // convert valid pinyin to lookup table
+
+        } else {
+            // not found, allow submit all
+            engine->cloudClient->request(*(engine->commitingCharacters), directFunc, (void*) engine, (ResponseCallbackFunc) enginePendingUpdatePreedit, (void*) engine);
+        }
+    } else {
+        switch (engine->luaBinding->callLuaFunction("processkey", "ddd>b", keyval, keycode, state, &res)) {
+            case 0: // success
+                break;
+            case -1:
+                DEBUG_PRINT(1, "[ENGINE] processkey(keyval, keycode, state) not found!\n");
+            default:
+                res = 0; // let other program handle this key
+        }
     }
+    ENGINE_MUTEX_UNLOCK;
+
     // update preedit
-    if (res) engineUpdatePreedit(engine);
+    engine->needUpdatePreedit = true;
+    engineUpdatePreedit(engine);
     return res;
 }
 
 static void engineFocusIn(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(1, "FocusIn\n");
-    engine->luaBinding->callLuaFunction(false, "focus", "b", 1);
+    DEBUG_PRINT(2, "[ENGINE] FocusIn\n");
+    engineUpdatePreedit(engine);
+    ibus_engine_show_auxiliary_text((IBusEngine*) engine);
+    ibus_engine_show_lookup_table((IBusEngine*) engine);
 }
 
 static void engineFocusOut(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(1, "FocusOut\n");
-    engine->luaBinding->callLuaFunction(false, "focus", "b", 0);
+    DEBUG_PRINT(2, "[ENGINE] FocusOut\n");
+    engineUpdatePreedit(engine);
+    ibus_engine_hide_auxiliary_text((IBusEngine*) engine);
+    ibus_engine_hide_lookup_table((IBusEngine*) engine);
 }
 
 static void engineReset(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(1, "Reset\n");
-    engine->luaBinding->callLuaFunction(false, "reset", "");
+    DEBUG_PRINT(1, "[ENGINE] Reset\n");
 }
 
 static void engineEnable(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(1, "Enable\n");
-    engine->luaBinding->callLuaFunction(false, "enable", "b", 1);
+    DEBUG_PRINT(1, "[ENGINE] Enable\n");
+    engine->enabled = true;
+    engineUpdatePreedit(engine);
 }
 
 static void engineDisable(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(1, "Disable\n");
-    engine->luaBinding->callLuaFunction(false, "enable", "b", 1);
+    DEBUG_PRINT(1, "[ENGINE] Disable\n");
+    engine->enabled = false;
+    engineUpdatePreedit(engine);
 }
 
 static void engineSetCursorLocation(IBusSgpyccEngine *engine, gint x, gint y, gint w, gint h) {
-    ENGINE_DEBUG_PRINT(2, "SetCursorLocation(%d, %d, %d, %d)\n", x, y, w, h);
-    engine->cursorHeight = h;
-    engine->cursorWidth = w;
-    engine->cursorX = x;
-    engine->cursorY = y;
+    DEBUG_PRINT(4, "[ENGINE] SetCursorLocation(%d, %d, %d, %d)\n", x, y, w, h);
+    engine->cursor_area.height = h;
+    engine->cursor_area.width = w;
+    engine->cursor_area.x = x;
+    engine->cursor_area.y = y;
+    engineUpdatePreedit(engine);
 }
 
 static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
-    ENGINE_DEBUG_PRINT(2, "SetCapabilities(%u)\n", caps);
+    DEBUG_PRINT(2, "[ENGINE] SetCapabilities(%u)\n", caps);
+    ENGINE_MUTEX_LOCK;
+
+    ENGINE_MUTEX_UNLOCK;
 }
 
 static void enginePageUp(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(2, "PageUp\n");
+    DEBUG_PRINT(2, "[ENGINE] PageUp\n");
+    ENGINE_MUTEX_LOCK;
+
+    ENGINE_MUTEX_UNLOCK;
 }
 
 static void enginePageDown(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(2, "PageDown\n");
+    DEBUG_PRINT(2, "[ENGINE] PageDown\n");
+    ENGINE_MUTEX_LOCK;
+
+    ENGINE_MUTEX_UNLOCK;
 }
 
 static void engineCursorUp(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(2, "CursorUp\n");
+    DEBUG_PRINT(2, "[ENGINE] CursorUp\n");
+    ENGINE_MUTEX_LOCK;
+
+    ENGINE_MUTEX_UNLOCK;
 }
 
 static void engineCursorDown(IBusSgpyccEngine *engine) {
-    ENGINE_DEBUG_PRINT(2, "CursorDown\n");
+    DEBUG_PRINT(2, "[ENGINE] CursorDown\n");
+    ENGINE_MUTEX_LOCK;
+
+    ENGINE_MUTEX_UNLOCK;
+}
+
+static jmp_buf sigBuffer;
+
+void sigsegvResumer(int sig) {
+    UNUSED(sig);
+    longjmp(sigBuffer, 1);
 }
 
 // this is not executed by signal
 
+static void enginePendingUpdatePreedit(IBusSgpyccEngine *engine) {
+    engine->needUpdatePreedit = true;
+}
+
 static void engineUpdatePreedit(IBusSgpyccEngine *engine) {
-    // this function need a mutex lock    
-    ENGINE_DEBUG_PRINT(1, "Update Preedit\n");
-
-    pthread_mutex_lock(&engine->updatePreeditMutex);
-    ENGINE_DEBUG_PRINT(3, "engineUpdatePreedit mutex locked\n");
-
+    // this function need a mutex lock
+    if (!engine->needUpdatePreedit) return;
+    DEBUG_PRINT(1, "[ENGINE] Update Preedit\n");
+    ENGINE_MUTEX_LOCK;
+    engine->needUpdatePreedit = false;
     engine->cloudClient->readLock();
-    ENGINE_DEBUG_PRINT(3, "requests locked. start reading request\n");
-
     size_t requestCount = engine->cloudClient->getRequestCount();
-    ENGINE_DEBUG_PRINT(3, "request count: %d\n", requestCount);
 
     // contains entire preedit text
     string preedit;
-
     // first few responsed requests can be commited, these two var count them
     bool canCommitToClient = true;
     size_t finishedCount = 0;
 
-    // this loop will set preedit string and count finishedCount
+    // this loop will commit front responed string, set preedit string and count finishedCount
+    string commitString = "";
     for (size_t i = 0; i < requestCount; ++i) {
-        ENGINE_DEBUG_PRINT(4, "first loop, request # %d\n", i);
         const PinyinCloudRequest& request = engine->cloudClient->getRequest(i);
         if (!request.responsed) canCommitToClient = false;
 
-        ENGINE_DEBUG_PRINT(5, "  id: %d\n", request.requestId);
-        ENGINE_DEBUG_PRINT(5, "  request: %s\n", request.requestString.c_str());
-        ENGINE_DEBUG_PRINT(5, "  responsed: %s\n", request.responsed ? request.responseString.c_str() : "(waiting)");
 
         if (canCommitToClient) {
-            IBusText *commitText;
-            commitText = ibus_text_new_from_string(request.responseString.c_str());
-            ibus_engine_commit_text((IBusEngine *) engine, commitText);
-            g_object_unref(commitText);
+            if (request.responseString.length() > 0) commitString += request.responseString;
             finishedCount++;
         } else {
             if (request.responsed) preedit += request.responseString;
@@ -305,21 +386,40 @@ static void engineUpdatePreedit(IBusSgpyccEngine *engine) {
         }
     }
 
+
+    if (commitString.length() > 0) {
+        {
+            IBusText *commitText;
+            commitText = ibus_text_new_from_printf("%s", commitString.c_str());
+            //void(*prevSigsegvHandler) (int sig);
+            if (commitText) {
+                // seems SEGMENTATION FAULT often happens here. I can not find the reason
+                // ibus_engine_commit_text thread safe ? seems so without lua -.-
+                ibus_engine_commit_text((IBusEngine *) engine, commitText);
+                g_object_unref(G_OBJECT(commitText));
+            } else {
+                fprintf(stderr, "[ERROR] can not create commitText.\n");
+            }
+        }
+        DEBUG_PRINT(4, "[ENGINE.UpdatePreedit] commited to client: %s\n", commitString.c_str());
+    }
+
     // append current preedit (not belong to a request, still editable, active)
     string activePreedit = engine->luaBinding->getValue("preedit", "");
     preedit += activePreedit;
-    ENGINE_DEBUG_PRINT(3, "preedit: %s\n", preedit.c_str());
+    DEBUG_PRINT(4, "[ENGINE.UpdatePreedit] preedit: %s\n", preedit.c_str());
 
     // build IBusText-type preeditText
+#if(1)
     IBusText *preeditText;
     preeditText = ibus_text_new_from_string(preedit.c_str());
     preeditText->attrs = ibus_attr_list_new();
-
+#endif
     // second loop will set color to preeditText
     // note that '，' will be consided 1 char
+#if(1)
     size_t preeditLen = 0;
     for (size_t i = finishedCount; i < requestCount; ++i) {
-        ENGINE_DEBUG_PRINT(4, "second loop, request # %d\n", i);
         const PinyinCloudRequest& request = engine->cloudClient->getRequest(i);
         size_t currReqLen;
         if (request.responsed) {
@@ -339,44 +439,46 @@ static void engineUpdatePreedit(IBusSgpyccEngine *engine) {
 
     // underlinize rightmost active preedit
     ibus_attr_list_append(preeditText->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, preeditLen, preedit.length()));
-    ENGINE_DEBUG_PRINT(3, "prepare to call update preedit text\n");
 
     // finally, update preedit
     ibus_engine_update_preedit_text((IBusEngine *) engine, preeditText, preedit.length(), TRUE);
-    ENGINE_DEBUG_PRINT(3, "called update preedit text\n");
 
     // remember to unref text
     g_object_unref(preeditText);
-    ENGINE_DEBUG_PRINT(3, "preeditText unreffed\n");
-
+#endif
     engine->cloudClient->readUnlock();
-    ENGINE_DEBUG_PRINT(3, "end reading request (Unlocked)\n");
 
     // pop finishedCount from requeset queue, no lock here, it's safe.
-    for (size_t i = 0; i < finishedCount; ++i) {
-        engine->cloudClient->removeFirstRequest();
-    }
-    ENGINE_DEBUG_PRINT(3, "finished requests popped\n");
+    engine->cloudClient->removeFirstRequest(finishedCount);
 
-    pthread_mutex_unlock(&engine->updatePreeditMutex);
-    ENGINE_DEBUG_PRINT(3, "engineUpdatePreedit mutex unlocked\n");
+    ENGINE_MUTEX_UNLOCK;
 }
 
 string fetchFunc(void* data, const string& requestString) {
+    // do not use same luaState in multi-thread env. lua will just be messed up
+
     IBusSgpyccEngine* engine = (typeof (engine)) data;
-    LuaIbusBinding* luaBinding = engine->luaBinding;
-    ENGINE_DEBUG_PRINT(2, "fetchFunc(%s)\n", requestString.c_str());
-    
+    DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
+
     string res;
-    if (luaBinding->callLuaFunction(true, "fetch", "s>s", requestString.c_str(), &res)) res = "";
+
+    //if (luaBinding->callLuaFunction(true, "fetch", "s>s", requestString.c_str(), &res)) res = "";
+    FILE* fresponse = popen((*(engine->fetcherPath) + " '" + requestString + "'") .c_str(), "r");
+
+    char response[engine->fetcherBufferSize];
+    fgets(response, sizeof (response), fresponse);
+    res = response;
+    pclose(fresponse);
+
     return res;
 }
 
 string directFunc(void* data, const string& requestString) {
-    IBusSgpyccEngine* engine = (typeof (engine)) data;
-    ENGINE_DEBUG_PRINT(2, "directFunc(%s)\n", requestString.c_str());
 
-    fflush(stdout);
+    //IBusSgpyccEngine* engine = (typeof (engine)) data;
+    DEBUG_PRINT(2, "[ENGINE] directFunc(%s)\n", requestString.c_str());
+
+
     return requestString;
 }
 
@@ -390,14 +492,16 @@ static int l_commitText(lua_State* L) {
     luaL_checkstring(L, 1);
 
 #if(0)
+    // direct commit test
     IBusText *commitText;
     commitText = ibus_text_new_from_string(lua_tostring(L, 1));
     ibus_engine_commit_text((IBusEngine *) (l2Engine[L]), commitText);
     g_object_unref(commitText);
 #else
     IBusSgpyccEngine* engine = l2Engine[L];
-    ENGINE_DEBUG_PRINT(1, "Commit: %s\n", lua_tostring(L, 1));
-    engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
+    //engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) enginePendingUpdatePreedit, (void*) engine);
 #endif
 
     return 0; // return 0 value to lua code
@@ -409,11 +513,11 @@ static int l_commitText(lua_State* L) {
  */
 static int l_sendRequest(lua_State* L) {
     luaL_checkstring(L, 1);
-
     IBusSgpyccEngine* engine = l2Engine[L];
-    ENGINE_DEBUG_PRINT(1, "Request: %s\n", lua_tostring(L, 1));
+    DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
 
-    engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    //engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) enginePendingUpdatePreedit, (void*) engine);
     return 0; // return 0 value to lua code
 }
 
@@ -423,11 +527,16 @@ static int l_sendRequest(lua_State* L) {
  */
 static int l_isIdle(lua_State* L) {
     IBusSgpyccEngine* engine = l2Engine[L];
-    ENGINE_DEBUG_PRINT(2, "IsIdle\n");
+    DEBUG_PRINT(2, "[ENGINE] l_isIdle\n");
+
+    lua_checkstack(L, 1);
+
 
     engine->cloudClient->readLock();
+
     lua_pushboolean(L, engine->cloudClient->getRequestCount() == 0 && engine->luaBinding->getValue("preedit", "").length() == 0);
     engine->cloudClient->readUnlock();
+
 
     return 1;
 }
@@ -438,7 +547,7 @@ static int l_isIdle(lua_State* L) {
  */
 static int l_removeLastRequest(lua_State* L) {
     IBusSgpyccEngine* engine = l2Engine[L];
-    ENGINE_DEBUG_PRINT(1, "RemoveLastRequest\n");
+    DEBUG_PRINT(2, "[ENGINE] l_removeLastRequest\n");
 
     engine->cloudClient->removeLastRequest();
     return 0;
