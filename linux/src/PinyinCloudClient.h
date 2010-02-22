@@ -12,7 +12,8 @@
 #ifndef _PinyinCloudClient_H
 #define	_PinyinCloudClient_H
 
-#include <pthread.h>
+#include <dbus/dbus.h>
+#include <glib.h>
 #include <deque>
 #include <string>
 
@@ -52,6 +53,7 @@ private:
     pthread_rwlock_t requestsLock;
     unsigned int nextRequestId;
 };
+
 
 #endif	/* _PinyinCloudClient_H */
 

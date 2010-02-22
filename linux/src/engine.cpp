@@ -74,7 +74,6 @@ static void engineCursorDown(IBusSgpyccEngine *engine);
 
 static void engineUpdatePreedit(IBusSgpyccEngine *engine);
 static void enginePendingUpdatePreedit(IBusSgpyccEngine *engine);
-static void engineProcessPendingActions(IBusSgpyccEngine *engine);
 
 // lua state to engine, to lookup IBusSgpyccEngine from a lua state
 static map<const lua_State*, IBusSgpyccEngine*> l2Engine;
@@ -500,8 +499,8 @@ static int l_commitText(lua_State* L) {
 #else
     IBusSgpyccEngine* engine = l2Engine[L];
     DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
-    //engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-    engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) enginePendingUpdatePreedit, (void*) engine);
+    engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    //engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) enginePendingUpdatePreedit, (void*) engine);
 #endif
 
     return 0; // return 0 value to lua code
@@ -516,8 +515,8 @@ static int l_sendRequest(lua_State* L) {
     IBusSgpyccEngine* engine = l2Engine[L];
     DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
 
-    //engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-    engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) enginePendingUpdatePreedit, (void*) engine);
+    engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    //engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) enginePendingUpdatePreedit, (void*) engine);
     return 0; // return 0 value to lua code
 }
 

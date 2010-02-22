@@ -98,6 +98,9 @@ void signalHandler(int signal) {
 int main(int argc, char const *argv[]) {
     mainThread = pthread_self();
 
+    // call dbus and glib multi thread init functions
+    g_thread_init(NULL);
+    dbus_threads_init_default();
     
     UNUSED(argv);
     signal(SIGSEGV, signalHandler);
