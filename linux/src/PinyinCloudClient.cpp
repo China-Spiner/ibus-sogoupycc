@@ -55,10 +55,8 @@ void* requestThreadFunc(void *data) {
             // note that unlock before callback
 
             if (request->callbackFunc) {
-
-                DEBUG_PRINT(3, "[CLOUD.REQTHREAD] prepare execute callback\n");
+                DEBUG_PRINT(4, "[CLOUD.REQTHREAD] prepare execute callback\n");
                 (*request->callbackFunc)(request->callbackParam);
-
             }
 
             delete request;
@@ -144,8 +142,8 @@ void PinyinCloudClient::request(const string requestString, FetchFunc fetchFunc,
 PinyinCloudClient::PinyinCloudClient() {
     DEBUG_PRINT(1, "[CLOUD] Init\n");
     // calling g_thread_init multi times is allowed.
-    g_thread_init(NULL);
-    dbus_threads_init_default();
+    // g_thread_init(NULL);
+    // dbus_threads_init_default();
     
     nextRequestId = 0;
     pthread_rwlock_init(&requestsLock, NULL);
@@ -185,7 +183,6 @@ const PinyinCloudRequest& PinyinCloudClient::getRequest(size_t index) const {
 }
 
 void PinyinCloudClient::removeFirstRequest(int count) {
-
     if (count > 0) {
         DEBUG_PRINT(3, "[CLOUD] Remove first %d request\n", count);
         pthread_rwlock_wrlock(&requestsLock);
@@ -198,7 +195,6 @@ void PinyinCloudClient::removeFirstRequest(int count) {
 }
 
 void PinyinCloudClient::removeLastRequest() {
-
     DEBUG_PRINT(3, "[CLOUD] Remove last request\n");
     pthread_rwlock_wrlock(&requestsLock);
     if (requests.size() > 0) requests.pop_back();

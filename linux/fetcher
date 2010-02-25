@@ -1,0 +1,24 @@
+#!/usr/bin/lua
+
+require 'luarocks.require'
+http = require 'socket.http'
+url = require 'socket.url'
+
+http.TIMEOUT = 5
+http.USERAGENT =  "ibus-sogoupycc"
+
+local py = arg[1] or 'kong bai'
+py = py:gsub(" ","'"):gsub("[^a-z']", '')
+
+local ret = http.request('http://web.pinyin.sogou.com/web_ime/get_ajax/'..py..'.key')
+
+if ret and ret:match('ime_query_res="([^"]*)"') then
+	local res = url.unescape(ret:match('ime_query_res="([^"]*)"'))
+	if res then
+		io.write(res:match('(.-)：'))
+	end
+else
+	io.write(py:gsub("'",' '),'')
+end
+
+--socket.sleep(math.random(10))

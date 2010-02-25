@@ -16,6 +16,7 @@
 #include <glib.h>
 #include <deque>
 #include <string>
+#include <pthread.h>
 
 using std::deque;
 using std::string;

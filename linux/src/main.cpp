@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string>
 #include <ibus.h>
+#include <signal.h>
 
 #include "defines.h"
 #include "engine.h"
@@ -21,8 +22,8 @@
 #include "PinyinCloudClient.h"
 #include "LuaBinding.h"
 
-
 int globalDebugLevel = 0;
+
 char debugCurrentSourceFile[2048];
 int debugCurrentSourceLine;
 int debugCurrentThread;
@@ -56,6 +57,7 @@ static void init(int mode) {
             "http://lihdd.net",
             "sgpycc", //exec
             "ibus-sgpycc");
+
     ibus_component_add_engine(component,
             ibus_engine_desc_new("sgpycc",
             "Sogou Cloud",

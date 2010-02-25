@@ -17,7 +17,7 @@
  * out: 0
  */
 int LuaBinding::l_printStack(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_printStack\n");
+    DEBUG_PRINT(3, "[LUABIND] l_printStack\n");
     int c;
     printf("LuaStack element count: %d\n", c = lua_gettop(L));
     for (int i = 1; i <= c; i++) {
@@ -51,8 +51,7 @@ int LuaBinding::l_printStack(lua_State *L) {
  * out: 1 boolean
  */
 int LuaBinding::l_keymask(lua_State *L) {
-    
-    DEBUG_PRINT(2, "[LUABIND] l_keymask (L: %x)\n", (int) L);
+    DEBUG_PRINT(3, "[LUABIND] l_keymask\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
     luaL_checktype(L, 2, LUA_TNUMBER);
     lua_checkstack(L, 1);
@@ -65,8 +64,7 @@ int LuaBinding::l_keymask(lua_State *L) {
  * out: 1 int
  */
 int LuaBinding::l_bitand(lua_State *L) {
-    
-    DEBUG_PRINT(2, "[LUABIND] l_bitand\n");
+    DEBUG_PRINT(3, "[LUABIND] l_bitand\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
     luaL_checktype(L, 2, LUA_TNUMBER);
     lua_checkstack(L, 1);
@@ -79,7 +77,7 @@ int LuaBinding::l_bitand(lua_State *L) {
  * out: 1 int
  */
 int LuaBinding::l_bitxor(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_bitxor\n");
+    DEBUG_PRINT(3, "[LUABIND] l_bitxor\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
     luaL_checktype(L, 2, LUA_TNUMBER);
     lua_checkstack(L, 1);
@@ -155,7 +153,7 @@ int LuaBinding::l_doubleToFullPinyin(lua_State *L) {
  * out: 1 int conflict count
  */
 int LuaBinding::l_setDoublePinyinScheme(lua_State *L) {
-    
+
     DEBUG_PRINT(1, "[LUABIND] setDoublePinyinScheme\n");
     luaL_checktype(L, 1, LUA_TTABLE);
 
@@ -218,7 +216,6 @@ DoublePinyinScheme LuaBinding::doublePinyinScheme;
 char LuaBinding::LIB_NAME[] = "pycc";
 
 LuaBinding::LuaBinding() {
-    
     DEBUG_PRINT(1, "[LUABIND] Init\n");
     // init mutex
     pthread_mutexattr_t luaStateMutexAttribute;
@@ -241,11 +238,11 @@ LuaBinding::LuaBinding() {
     // L - this one-to-one relation. (Now it takes O(logN) to lookup 'this'
     // from L. Any way to make it more smooth?)
     luaStates[L] = this;
-    
+
 }
 
 const lua_State* LuaBinding::getLuaState() const {
-    
+
     return L;
 }
 
@@ -253,7 +250,7 @@ const lua_State* LuaBinding::getLuaState() const {
  * return 0 if no error
  */
 int LuaBinding::doString(const char* luaScript) {
-    
+
     DEBUG_PRINT(3, "[LUABIND] doString(%s)\n", luaScript);
     int r = luaL_dostring(L, luaScript);
     if (r) {
@@ -278,9 +275,9 @@ int LuaBinding::doString(const char* luaScript) {
  */
 int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ...) {
     DEBUG_PRINT(2, "[LUABIND] callLua: %s (%s)\n", funcName, sig);
-    
+
     int narg, nres, ret = 0;
-    
+
     va_list vl;
     va_start(vl, sig);
 
@@ -289,20 +286,20 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
     pthread_mutex_lock(&luaStateMutex);
 
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Stack size at the beginning: %d\n", lua_gettop(state));
-    
+
     lua_checkstack(state, strlen(sig) + 2);
 
     lua_getglobal(state, LIB_NAME);
     lua_getfield(state, -1, funcName); // stack: 2 elements
 
-    
+
     if (lua_isnil(state, -1)) {
         // function not found, here just ignore and skip.
         ret = -1;
         lua_pop(state, 2); // pop nil and libname
         goto callLuaFunction_exit;
     }
-   
+
     for (narg = 0; *sig; ++narg, ++sig) {
         luaL_checkstack(state, 1, "too many arguments");
         if (*sig == 'd') lua_pushinteger(state, va_arg(vl, int));
@@ -317,7 +314,7 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
         }
     }
 
-    
+
     nres = strlen(sig);
     // prevent dead lock
     pthread_mutex_unlock(&luaStateMutex);
@@ -355,13 +352,13 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
             default:
                 fprintf(stderr, "invalid option (%c) in callLua\n", *sig);
         }
-        
+
     }
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Cleaning\n");
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Stack size: %d, result count: %d\n", lua_gettop(state), nres);
     lua_pop(state, nres + 1); // pop ret values and lib name
 
-callLuaFunction_exit:    
+callLuaFunction_exit:
     // pop values before enter here
     pthread_mutex_unlock(&luaStateMutex);
 
@@ -370,8 +367,7 @@ callLuaFunction_exit:
 }
 
 void LuaBinding::addFunction(const lua_CFunction func, const char * funcName) {
-    
-    DEBUG_PRINT(0, "[LUABIND] addFunction: %s\n", funcName);
+    DEBUG_PRINT(1, "[LUABIND] addFunction: %s\n", funcName);
 
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 3);
@@ -384,79 +380,94 @@ void LuaBinding::addFunction(const lua_CFunction func, const char * funcName) {
 }
 
 bool LuaBinding::getValue(const char* varName, const bool defaultValue, const char* libName) {
-    
     DEBUG_PRINT(4, "[LUABIND] getValue(boolean): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
     lua_getglobal(L, libName);
-    lua_getfield(L, -1, varName);
     bool r = defaultValue;
-    if (lua_isboolean(L, -1)) r = lua_toboolean(L, -1);
-    lua_pop(L, 2);
+    if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, varName);
+        if (lua_isboolean(L, -1)) r = lua_toboolean(L, -1);
+        lua_pop(L, 2);
+    } else {
+        lua_pop(L, 1);
+    }
     pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
 
 string LuaBinding::getValue(const char* varName, const char* defaultValue, const char* libName) {
-    
     DEBUG_PRINT(4, "[LUABIND] getValue(string): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
     lua_getglobal(L, libName);
-    lua_getfield(L, -1, varName);
     string r = defaultValue;
-    if (lua_isstring(L, -1)) r = lua_tostring(L, -1);
-    lua_pop(L, 2);
+    if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, varName);
+        if (lua_isstring(L, -1)) r = lua_tostring(L, -1);
+        lua_pop(L, 2);
+    } else {
+        lua_pop(L, 1);
+    }
     pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
 
 int LuaBinding::getValue(const char* varName, const int defaultValue, const char* libName) {
-    
+
     DEBUG_PRINT(4, "[LUABIND] getValue(int): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
     lua_getglobal(L, libName);
-    lua_getfield(L, -1, varName);
     int r = defaultValue;
-    if (lua_isnumber(L, -1)) r = lua_tointeger(L, -1);
-    lua_pop(L, 2);
+    if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, varName);
+        if (lua_isnumber(L, -1)) r = lua_tointeger(L, -1);
+        lua_pop(L, 2);
+    } else {
+        lua_pop(L, 1);
+    }
     pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
 
 void LuaBinding::setValue(const char* varName, const int value, const char* libName) {
-    
+
     DEBUG_PRINT(4, "[LUABIND] setValue(int): %s.%s = %d\n", libName, varName, value);
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
     lua_getglobal(L, libName);
-    lua_pushinteger(L, value);
-    lua_setfield(L, -2, varName); //it will pop value
+    if (lua_istable(L, -1)) {
+        lua_pushinteger(L, value);
+        lua_setfield(L, -2, varName); //it will pop value
+    }
     lua_pop(L, 1);
     pthread_mutex_unlock(&luaStateMutex);
 }
 
 void LuaBinding::setValue(const char* varName, const char value[], const char* libName) {
-    
+
     DEBUG_PRINT(4, "[LUABIND] setValue(string): %s.%s = '%s'\n", libName, varName, value);
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
     lua_getglobal(L, libName);
-    lua_pushstring(L, value);
-    lua_setfield(L, -2, varName); //it will pop value
+    if (lua_istable(L, -1)) {
+        lua_pushstring(L, value);
+        lua_setfield(L, -2, varName); //it will pop value
+    }
     lua_pop(L, 1);
     pthread_mutex_unlock(&luaStateMutex);
 }
 
 void LuaBinding::setValue(const char* varName, const bool value, const char* libName) {
-    
     DEBUG_PRINT(4, "[LUABIND] setValue(boolean): %s.%s = %s\n", libName, varName, value ? "true" : "false");
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
     lua_getglobal(L, libName);
-    lua_pushboolean(L, value);
-    lua_setfield(L, -2, varName); //it will pop value
+    if (lua_istable(L, -1)) {
+        lua_pushboolean(L, value);
+        lua_setfield(L, -2, varName); //it will pop value
+    }
     lua_pop(L, 1);
     pthread_mutex_unlock(&luaStateMutex);
 }
@@ -465,11 +476,10 @@ void LuaBinding::setValue(const char* varName, const bool value, const char* lib
  * this is private and should not be used.
  */
 LuaBinding::LuaBinding(const LuaBinding& orig) {
-    
+
 }
 
 LuaBinding::~LuaBinding() {
-    
     DEBUG_PRINT(1, "[LUABIND] Destroy\n");
     luaStates.erase(L);
     lua_close(L);

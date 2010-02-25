@@ -42,9 +42,10 @@ public:
     void addFunction(const lua_CFunction func, const char * funcName);
 
     const lua_State* getLuaState() const;
+    static DoublePinyinScheme doublePinyinScheme;
+
 private:
     LuaBinding(const LuaBinding& orig);
-    static DoublePinyinScheme doublePinyinScheme;
     pthread_mutex_t luaStateMutex;
 
     // Lua C functions related
