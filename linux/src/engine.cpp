@@ -79,6 +79,11 @@ struct _IBusSgpyccEngine {
     // prop list
     IBusPropList *propList;
     IBusProperty *engModeProp;
+
+    // database confs
+    int dbResultLimit;
+    string* dbOrder;
+    double dbLongPhraseAdjust;
 #define INVALID_COLOR -1
 };
 
@@ -314,7 +319,16 @@ static void engineInit(IBusSgpyccEngine *engine) {
         g_object_unref(text);
     }
 
-    // for punctuation map, stored in lua state, do not store it here
+    // punctuation map is stored in lua state, since it is complicated, do not store it here
+
+    // database confs
+    engine->dbResultLimit = engine->luaBinding->getValue("dbLimit", 64);
+    engine->dbLongPhraseAdjust = engine->luaBinding->getValue("dbPhraseAdjust", 1.0);
+    engine->dbOrder = new string(engine->luaBinding->getValue("dbOrder", ""));
+    if (engine->dbOrder->length() == 0) {
+        if (LuaBinding::pinyinDatabases.size() > 0) *engine->dbOrder = "d";
+        else *engine->dbOrder = "2";
+    }
 
     // read in colors (-1: use default)
     engine->preeditForeColor = engine->luaBinding->getValue("preeditForeColor", 0x0050FF);
@@ -339,6 +353,7 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     DEBUG_PRINT(1, "[ENGINE] Destroy\n");
     l2Engine.erase(engine->luaBinding->getLuaState());
     pthread_mutex_destroy(&engine->engineMutex);
+    // delete strings
     delete engine->luaBinding;
     delete engine->cloudClient;
     delete engine->fetcherPath;
@@ -346,6 +361,8 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     delete engine->tableLabelKeys;
     delete engine->preedit;
     delete engine->activePreedit;
+    delete engine->dbOrder;
+    // unref g objects
 #define DELETE_G_OBJECT(x) if(x != NULL) g_object_unref(x), x = NULL;
     DELETE_G_OBJECT(engine->table);
     DELETE_G_OBJECT(engine->propList);
@@ -382,7 +399,7 @@ engineProcessKeyEventStart:
     }
 
     if (engine->convertingPinyins->length() > 0) {
-        // find a pinyin
+        // cut off pinyins, get leftmost pinyin
         string s = *(engine->convertingPinyins) + " ";
         int spacePosition = s.find(' ');
 
@@ -422,22 +439,10 @@ engineProcessKeyEventStart:
                     // invalid option, ignore
                     // IMPROVE: beep
                     res = TRUE;
-                } else if (ibus_text_get_length(candidate) == 1) {
-                    // commit it
-                    IBusText* text = ibus_text_new_from_string(candidate->text);
-                    ibus_engine_commit_text((IBusEngine*) engine, text);
-                    g_object_unref(text);
-                    // remove pinyin section from commitingPinyins
-                    engine->convertingPinyins->erase(0, (*(engine->convertingPinyins) + " ").find(' ') + 1);
-                    // rescan, rebuild lookup table
-                    ibus_lookup_table_clear(engine->table);
-                    keyval = 0;
-                    res = TRUE;
-                    goto engineProcessKeyEventStart;
-                } else if (candidate->attrs != NULL) {
+                } else if (candidate->attrs->attributes->len > 0) {
+                    // underlined, need 2nd select
                     // build new table according to selected
                     int l = ibus_text_get_length(candidate);
-
                     // backup candidate before clear table
                     IBusText *candidateCharacters = ibus_text_new_from_string(candidate->text);
                     const gchar *utf8char = candidateCharacters->text;
@@ -452,18 +457,64 @@ engineProcessKeyEventStart:
                     g_object_unref(candidateCharacters);
                     engine->tablePageNumber = 0;
                     res = TRUE;
+                } else {
+                    // normal character or phrase, commit it
+                    IBusText* text = ibus_text_new_from_string(candidate->text);
+                    int length = ibus_text_get_length(text);
+                    ibus_engine_commit_text((IBusEngine*) engine, text);
+                    g_object_unref(text);
+                    // remove pinyin section from commitingPinyins
+                    for (int i = 0; i < length; ++i) engine->convertingPinyins->erase(0, (*(engine->convertingPinyins) + " ").find(' ') + 1);
+                    // rescan, rebuild lookup table
+                    ibus_lookup_table_clear(engine->table);
+                    keyval = 0;
+                    res = TRUE;
+                    goto engineProcessKeyEventStart;
                 }
             }
         }
         if (ibus_lookup_table_get_number_of_candidates(engine->table) == 0) {
             // update and show lookup table
+            // according to dbOrder
             ibus_lookup_table_clear(engine->table);
-            for (int tone = 1; tone <= 5; ++tone) {
-                IBusText* candidate = ibus_text_new_from_string((PinyinUtility::getCandidates(pinyin, tone)).c_str());
-                if (ibus_text_get_length(candidate) > 1) {
-                    candidate->attrs = ibus_attr_list_new();
-                    ibus_attr_list_append(candidate->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, 0, ibus_text_get_length(candidate)));
-                }
+            for (const char *dbo = engine->dbOrder->c_str(); *dbo; ++dbo) switch (*dbo) {
+                    case '2':
+                    {
+                        // gb2312 internal db
+                        for (int tone = 1; tone <= 5; ++tone) {
+                            IBusText* candidate = ibus_text_new_from_string((PinyinUtility::getCandidates(pinyin, tone)).c_str());
+                            if (ibus_text_get_length(candidate) > 1) {
+                                candidate->attrs = ibus_attr_list_new();
+                                ibus_attr_list_append(candidate->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, 0, ibus_text_get_length(candidate)));
+                            }
+                            ibus_lookup_table_append_candidate(engine->table, candidate);
+                            g_object_unref(candidate);
+                        }
+                        break;
+                    }
+                    case 'd':
+                    {
+                        // external db
+                        CandidateList cl;
+                        set<string> cInserted;
+                        for (map<string, PinyinDatabase*>::iterator it = LuaBinding::pinyinDatabases.begin(); it != LuaBinding::pinyinDatabases.end(); ++it) {
+                            it->second->query(*(engine->convertingPinyins), cl, engine->dbResultLimit, engine->dbLongPhraseAdjust);
+                        }
+                        for (CandidateList::iterator it = cl.begin(); it != cl.end(); ++it) {
+                            const string & candidate = it->second;
+                            if (cInserted.find(candidate) == cInserted.end()) {
+                                IBusText* candidateText = ibus_text_new_from_string(it->second.c_str());
+                                ibus_lookup_table_append_candidate(engine->table, candidateText);
+                                g_object_unref(candidateText);
+                                cInserted.insert(it->second);
+                            }
+                        }
+                        break;
+                    }
+                } // for dborder
+            // still zero result? put a dummy one
+            if (ibus_lookup_table_get_number_of_candidates(engine->table) == 0) {
+                IBusText* candidate = ibus_text_new_from_string("-");
                 ibus_lookup_table_append_candidate(engine->table, candidate);
                 g_object_unref(candidate);
             }

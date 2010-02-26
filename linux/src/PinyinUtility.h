@@ -32,10 +32,10 @@ public:
     PinyinUtility();
     virtual ~PinyinUtility();
 
-    static bool isValidPinyin(const string& pinyin);
+    static const bool isValidPinyin(const string& pinyin);
 
-    static string charactersToPinyins(const string& characters, bool includeTone = false);
-    static string getCandidates(const string& pinyin, int tone);
+    static const string charactersToPinyins(const string& characters, bool includeTone = false);
+    static const string getCandidates(const string& pinyin, int tone);
 
 private:
     PinyinUtility(const PinyinUtility& orig);
@@ -73,10 +73,10 @@ public:
 
     void bindKey(const char key, const string& consonant, const vector<string>& vowels);
     void clear();
-    int buildMap();
-    string query(const char firstChar, const char secondChar);
-    string query(const string& doublePinyinString);
-    bool isValidDoublePinyin(const string& doublePinyinString);
+    const int buildMap();
+    const string query(const char firstChar, const char secondChar);
+    const string query(const string& doublePinyinString);
+    const bool isValidDoublePinyin(const string& doublePinyinString);
     const bool isKeyBinded(const char key);
 
     virtual ~DoublePinyinScheme();

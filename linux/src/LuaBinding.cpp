@@ -14,6 +14,28 @@
 
 // Lua C functions
 
+int LuaBinding::l_loadPhraseDatabase(lua_State* L) {
+    DEBUG_PRINT(3, "[LUABIND] l_loadPhraseDatabase\n");
+    luaL_checktype(L, 1, LUA_TSTRING);
+    lua_checkstack(L, 1);
+
+    string dbPath = lua_tostring(L, 1);
+    double weight = 1;
+    int r = 0;
+
+    if (lua_type(L, 2) == LUA_TNUMBER) weight = lua_tonumber(L, 2);
+    if (pinyinDatabases.find(dbPath) == pinyinDatabases.end()) {
+        PinyinDatabase *pydb = new PinyinDatabase(dbPath, weight);
+        if (pydb->isDatabaseOpened()) {
+            r = 1;
+            pinyinDatabases.insert(pair<string, PinyinDatabase*>(dbPath, pydb));
+        } else delete pydb;
+    }
+
+    lua_pushinteger(L, r);
+    return 1;
+}
+
 int LuaBinding::l_setDebugLevel(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_setDebugLevel\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
@@ -180,14 +202,16 @@ const struct luaL_Reg LuaBinding::pycclib[] = {
     // {"printStack", LuaBinding::l_printStack},
     {"charsToPinyin", LuaBinding::l_charsToPinyin},
     {"setDebugLevel", LuaBinding::l_setDebugLevel},
+    {"loadDatabase", LuaBinding::l_loadPhraseDatabase},
     {NULL, NULL}
 };
 
-// LuaIbusBinding class
+// LuaBinding class
 
 map<const lua_State*, LuaBinding*> LuaBinding::luaStates;
 DoublePinyinScheme LuaBinding::doublePinyinScheme;
 char LuaBinding::LIB_NAME[] = "pycc";
+map<string, PinyinDatabase*> LuaBinding::pinyinDatabases;
 
 LuaBinding::LuaBinding() {
     DEBUG_PRINT(1, "[LUABIND] Init\n");
@@ -405,6 +429,23 @@ int LuaBinding::getValue(const char* varName, const int defaultValue, const char
     return r;
 }
 
+double LuaBinding::getValue(const char* varName, const double defaultValue, const char* libName) {
+    DEBUG_PRINT(4, "[LUABIND] getValue(int): %s.%s\n", libName, varName);
+    pthread_mutex_lock(&luaStateMutex);
+    lua_checkstack(L, 2);
+    lua_getglobal(L, libName);
+    double r = defaultValue;
+    if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, varName);
+        if (lua_isnumber(L, -1)) r = lua_tointeger(L, -1);
+        lua_pop(L, 2);
+    } else {
+        lua_pop(L, 1);
+    }
+    pthread_mutex_unlock(&luaStateMutex);
+    return r;
+}
+
 void LuaBinding::setValue(const char* varName, const int value, const char* libName) {
 
     DEBUG_PRINT(4, "[LUABIND] setValue(int): %s.%s = %d\n", libName, varName, value);
@@ -458,4 +499,11 @@ LuaBinding::~LuaBinding() {
     luaStates.erase(L);
     lua_close(L);
     pthread_mutex_destroy(&luaStateMutex);
+    // close dbs
+    for (map<string, PinyinDatabase*>::iterator it = pinyinDatabases.begin(); it != pinyinDatabases.end(); ++it) {
+        if (it->second) {
+            delete it->second;
+            it->second = NULL;
+        }
+    }
 }

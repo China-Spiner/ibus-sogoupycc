@@ -19,8 +19,10 @@ extern "C" {
 #include <map>
 #include "PinyinUtility.h"
 #include "PinyinCloudClient.h"
+#include "PinyinDatabase.h"
 
 using std::map;
+using std::pair;
 
 class LuaBinding {
 public:
@@ -31,6 +33,7 @@ public:
     string getValue(const char* varName, const char* defaultValue = "", const char* libName = LIB_NAME);
     int getValue(const char* varName, const int defaultValue = -1, const char* libName = LIB_NAME);
     bool getValue(const char* varName, const bool defaultValue = false, const char* libName = LIB_NAME);
+    double getValue(const char* varName, const double defaultValue, const char* libName = LIB_NAME);
     void setValue(const char* varName, const int value, const char* libName = LIB_NAME);
     void setValue(const char* varName, const char value[], const char* libName = LIB_NAME);
     void setValue(const char* varName, const bool value, const char* libName = LIB_NAME);
@@ -42,8 +45,9 @@ public:
     void addFunction(const lua_CFunction func, const char * funcName);
 
     const lua_State* getLuaState() const;
+    
     static DoublePinyinScheme doublePinyinScheme;
-
+    static map<string, PinyinDatabase*> pinyinDatabases;
 private:
     LuaBinding(const LuaBinding& orig);
     pthread_mutex_t luaStateMutex;
@@ -112,6 +116,12 @@ private:
      * out: -
      */
     static int l_printStack(lua_State *L);
+    /**
+     * load pinyin database (ibus-pinyin 1.2.99 compatible)
+     * in: string, double
+     * out: int
+     */
+    static int l_loadPhraseDatabase(lua_State *L);
 };
 
 #endif	/* _LUAIBUSBINDING_H */
