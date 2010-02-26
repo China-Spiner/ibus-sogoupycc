@@ -77,6 +77,7 @@ public:
     string query(const char firstChar, const char secondChar);
     string query(const string& doublePinyinString);
     bool isValidDoublePinyin(const string& doublePinyinString);
+    const bool isKeyBinded(const char key);
 
     virtual ~DoublePinyinScheme();
 private:

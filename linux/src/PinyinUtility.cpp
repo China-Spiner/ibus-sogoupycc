@@ -196,3 +196,6 @@ int DoublePinyinScheme::buildMap() {
     return conflictCount;
 }
 
+const bool DoublePinyinScheme::isKeyBinded(const char key) {
+    return bindedKeys.find(key) != bindedKeys.end();
+}

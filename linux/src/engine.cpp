@@ -515,7 +515,6 @@ engineProcessKeyEventStart:
 
                     // do not handle alt, ctrl ... event (such as Alt - F, Ctrl - T)
                     if (state != 0 && (state ^ IBUS_SHIFT_MASK) != 0) {
-                        // IMPROVE: user may press ctrl - a and setCursorLocation may not be triggered, then selection won't be updated
                         res = FALSE;
                         break;
                     }
@@ -527,18 +526,7 @@ engineProcessKeyEventStart:
 
                     // in chinese mode ?
                     if (!engine->engMode) {
-                        // punctuation
-                        string punctuation = "";
-                        engine->luaBinding->callLuaFunction("getPunc", "s>s", keychrs.c_str(), &punctuation);
-                        if (punctuation.length() > 0) {
-                            // registered punctuation
-                            if (engine->preedit->length() > 0) {
-                                engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                                *engine->preedit = "";
-                            }
-                            engine->cloudClient->request(punctuation, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                            handled = true;
-                        } else if (keyval == engine->startCorrectionKey) {
+                        if (keyval == engine->startCorrectionKey) {
                             // switch to editing mode
                             if (engine->preedit->length() > 0) {
                                 // edit active preedit
@@ -591,15 +579,37 @@ engineProcessKeyEventStart:
                                 keyval = 0;
                                 keychrs = "";
                             }
-                        } else if (keyval >= IBUS_a && keyval <= IBUS_z) {
-                            // pinyin character
-                            // IMPROVE: handle ';' in MSPY double pinyin scheme and "'" in full pinyin
+                        } else if (keyval < 128) {
+                            // assuming that this is a pinyin char
+                            // double pinyin may use ';' while full pinyin may use '\''
                             if (engine->useDoublePinyin) {
-                                if (LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit + keychr)) *engine->preedit += keychr;
-                            } else {
+                                if (LuaBinding::doublePinyinScheme.isKeyBinded(keychr)) {
+                                    if (LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit + keychr)) {
+                                        *engine->preedit += keychr;
+                                        handled = true;
+                                    }
+                                }
+                                if (keyval >= IBUS_a && keyval <= IBUS_z) handled = true;
+                            } else if ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0)) {
+                                if (keyval == '\'') keychr = ' ';
                                 *engine->preedit += keychr;
+                                handled = true;
                             }
-                            handled = true;
+                        }
+
+                        if (!handled) {
+                            // check punctuation
+                            string punctuation = "";
+                            engine->luaBinding->callLuaFunction("getPunc", "s>s", keychrs.c_str(), &punctuation);
+                            if (punctuation.length() > 0) {
+                                // registered punctuation
+                                if (engine->preedit->length() > 0) {
+                                    engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                                    *engine->preedit = "";
+                                }
+                                engine->cloudClient->request(punctuation, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                                handled = true;
+                            }
                         }
 
                         // update active preedit
