@@ -21,6 +21,7 @@
 #include "PinyinUtility.h"
 #include "PinyinCloudClient.h"
 #include "LuaBinding.h"
+#include "XUtility.h"
 
 int globalDebugLevel = 0;
 
@@ -100,6 +101,9 @@ void signalHandler(int signal) {
 int main(int argc, char const *argv[]) {
     mainThread = pthread_self();
 
+    //printf("\"%s\"",PinyinUtility::charactersToPinyins("我们在这里输入汉字，Microsoft Pinyin是微软拼音输入法.").c_str());
+    //return 0;
+    
     // call dbus and glib multi thread init functions
     g_thread_init(NULL);
     dbus_threads_init_default();
@@ -115,6 +119,7 @@ int main(int argc, char const *argv[]) {
 
     ibus_main();
     DEBUG_PRINT(1, "[MAIN] Exiting...\n");
+    XUtility::staticDestruct();
     
     return 0;
 }

@@ -59,23 +59,36 @@ string PinyinUtility::getCandidates(const string& pinyin, int tone) {
 string PinyinUtility::charactersToPinyins(const string& characters, bool includeTone) {
     staticInitializer();
 
-    string pinyins = "";
+    string pinyins = "", unregonised = "";
 
     for (size_t pos = 0; pos < characters.length();) {
         // each chinese character takes 3 bytes using UTF-8
+        // IMPOROVE: use glib to handle utf8 characters
         string character = characters.substr(pos, 3);
         multimap<string, map<string, string>::iterator >::iterator pinyinPair = gb2312characterMap.find(character);
         if (pinyinPair != gb2312characterMap.end()) {
+            if (unregonised.length() > 0) {
+                if (pinyins.length() > 0) pinyins += " ";
+                pinyins += unregonised;
+                unregonised = "";
+            }
             if (pinyins.length() > 0) pinyins += " ";
             if (includeTone) pinyins += pinyinPair->second->first;
             else pinyins += pinyinPair->second->first.substr(0, pinyinPair->second->first.length() - 1);
             pos += 3;
         } else {
             // unregonised, only take 1 character
-            if (pinyins.length() > 0) pinyins += " ";
-            pinyins += characters[pos];
+            if (characters[pos] == ' ') {
+                if (unregonised.length() > 1 && unregonised[unregonised.length() - 1] != ' ') unregonised += ' ';
+            }
+            unregonised += characters[pos];
             pos++;
         }
+    }
+    if (unregonised.length() > 0) {
+        if (pinyins.length() > 0) pinyins += " ";
+        pinyins += unregonised;
+        unregonised = "";
     }
     return pinyins;
 }
