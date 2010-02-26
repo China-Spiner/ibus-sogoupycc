@@ -6,7 +6,7 @@ ELSE()
   SET(PKGDATADIR "${SHARE_INSTALL_PREFIX}/ibus-sogoupycc")
 ENDIF()
 
-ADD_EXECUTABLE(ibus-sogoupycc PinyinUtility.cpp;LuaBinding.cpp;PinyinDatabase;PinyinCloudClient.cpp;engine.cpp;XUtility.cpp;main.cpp)
+ADD_EXECUTABLE(ibus-sogoupycc PinyinUtility.cpp;LuaBinding.cpp;PinyinDatabase.cpp;PinyinCloudClient.cpp;engine.cpp;XUtility.cpp;main.cpp)
 
 FIND_PACKAGE(PkgConfig)
 PKG_CHECK_MODULES(REQPKGS REQUIRED ibus-1.0>=1.2.0;ibus-1.0<=1.2.98;lua>=5.1;lua<=5.1.99;glib-2.0>=2.22;gthread-2.0>=2.22;dbus-1>=1.2;xmu;sqlite3)
