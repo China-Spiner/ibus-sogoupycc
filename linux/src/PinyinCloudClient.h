@@ -22,7 +22,7 @@ using std::deque;
 using std::string;
 
 typedef void (*ResponseCallbackFunc)(void*);
-typedef string (*FetchFunc)(void*, const string&);
+typedef string(*FetchFunc)(void*, const string&);
 
 struct PinyinCloudRequest {
     bool responsed;
@@ -38,15 +38,35 @@ class PinyinCloudClient {
 public:
     PinyinCloudClient();
     virtual ~PinyinCloudClient();
+
+    /**
+     * perform a read lock before calling this.
+     */
     const size_t getRequestCount() const;
+    /**
+     * perform a read lock op before calling this.
+     */
     const PinyinCloudRequest& getRequest(size_t index) const;
+
+    /**
+     * lock for reading purpose
+     * this should not take a long time until readUnlock() !
+     */
     void readLock();
     void readUnlock();
+
+    /**
+     * push a request to request queue, start a sub process to fetch result
+     * callbackFunc can be NULL, fetchFunc can't
+     */
     void request(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam);
     void removeFirstRequest(int count = 1);
     void removeLastRequest();
 
 private:
+    /**
+     *  this is private and should not be used.
+     */
     PinyinCloudClient(const PinyinCloudClient& orig);
     friend void* requestThreadFunc(void *data);
 

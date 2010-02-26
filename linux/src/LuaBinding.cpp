@@ -14,11 +14,6 @@
 
 // Lua C functions
 
-/**
- * set global debug level
- * in: 1 int
- * out: 0
- */
 int LuaBinding::l_setDebugLevel(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_setDebugLevel\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
@@ -26,11 +21,6 @@ int LuaBinding::l_setDebugLevel(lua_State *L) {
     return 0;
 }
 
-/**
- * print lua stack, for debugging
- * in: 0
- * out: 0
- */
 int LuaBinding::l_printStack(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_printStack\n");
     int c;
@@ -61,10 +51,6 @@ int LuaBinding::l_printStack(lua_State *L) {
     return 0;
 }
 
-/**
- * in: 2 int
- * out: 1 boolean
- */
 int LuaBinding::l_keymask(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_keymask\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
@@ -74,10 +60,6 @@ int LuaBinding::l_keymask(lua_State *L) {
     return 1;
 }
 
-/**
- * in: 2 int
- * out: 1 int
- */
 int LuaBinding::l_bitand(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_bitand\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
@@ -87,10 +69,6 @@ int LuaBinding::l_bitand(lua_State *L) {
     return 1;
 }
 
-/**
- * in: 2 int
- * out: 1 int
- */
 int LuaBinding::l_bitxor(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_bitxor\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
@@ -100,10 +78,6 @@ int LuaBinding::l_bitxor(lua_State *L) {
     return 1;
 }
 
-/**
- * in: 2 int
- * out: 1 int
- */
 int LuaBinding::l_bitor(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_bitor\n");
     luaL_checktype(L, 1, LUA_TNUMBER);
@@ -113,10 +87,6 @@ int LuaBinding::l_bitor(lua_State *L) {
     return 1;
 }
 
-/**
- * in: 1 string
- * out: 1 bool
- */
 int LuaBinding::l_isValidPinyin(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_isValidPinyin\n");
     luaL_checktype(L, 1, LUA_TSTRING);
@@ -125,10 +95,6 @@ int LuaBinding::l_isValidPinyin(lua_State *L) {
     return 1;
 }
 
-/**
- * in: 1 string
- * out: 1 string
- */
 int LuaBinding::l_charsToPinyin(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_charsToPinyin\n");
     luaL_checktype(L, 1, LUA_TSTRING);
@@ -150,10 +116,6 @@ int LuaBinding::l_isValidDoublePinyin(lua_State *L) {
     return 1;
 }
 
-/**
- * in: 1 string
- * out: 1 string
- */
 int LuaBinding::l_doubleToFullPinyin(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_doubleToFullPinyin\n");
     luaL_checktype(L, 1, LUA_TSTRING);
@@ -163,10 +125,6 @@ int LuaBinding::l_doubleToFullPinyin(lua_State *L) {
     return 1;
 }
 
-/**
- * in: 1 table
- * out: 1 int conflict count
- */
 int LuaBinding::l_setDoublePinyinScheme(lua_State *L) {
 
     DEBUG_PRINT(1, "[LUABIND] setDoublePinyinScheme\n");

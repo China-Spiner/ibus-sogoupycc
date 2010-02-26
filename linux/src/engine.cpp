@@ -470,7 +470,7 @@ engineProcessKeyEventStart:
                     if ((state & IBUS_RELEASE_MASK) == IBUS_RELEASE_MASK && engine->lastKeyval == keyval) {
                         if (keyval == engine->engModeToggleKey) {
                             engine->engMode = !engine->engMode;
-                            // TODO: notify user
+                            // IMPROVE: notify user
                             if (engine->engMode) {
                                 *engine->preedit = "";
                                 *engine->activePreedit = "";

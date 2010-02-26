@@ -25,7 +25,7 @@ using std::map;
 class LuaBinding {
 public:
     static char LIB_NAME[];
-    
+
     LuaBinding();
 
     string getValue(const char* varName, const char* defaultValue = "", const char* libName = LIB_NAME);
@@ -53,18 +53,64 @@ private:
     static const struct luaL_Reg pycclib[];
     static map<const lua_State*, LuaBinding*> luaStates;
 
+    /**
+     * in: table
+     * out: int
+     */
     static int l_setDoublePinyinScheme(lua_State *L);
+    /**
+     * call this after setDoublePinyinScheme
+     * in: string
+     * out: boolean
+     */
     static int l_isValidDoublePinyin(lua_State *L);
+    /**
+     * in: string
+     * out: string
+     */
     static int l_doubleToFullPinyin(lua_State *L);
+
+    /**
+     * in: string
+     * out: string
+     */
     static int l_charsToPinyin(lua_State *L);
+    /**
+     * in: string
+     * out: boolean
+     */
     static int l_isValidPinyin(lua_State *L);
+    /**
+     * set global debug level
+     * in: int
+     * out: -
+     */
     static int l_setDebugLevel(lua_State *L);
-
+    /**
+     * in: int, int
+     * out: int
+     */
     static int l_bitand(lua_State *L);
+    /**
+     * in: int, int
+     * out: int
+     */
     static int l_bitor(lua_State *L);
+    /**
+     * in: int, int
+     * out: int
+     */
     static int l_bitxor(lua_State *L);
+    /**
+     * in: int(state), int(mask)
+     * out: boolean
+     */
     static int l_keymask(lua_State *L);
-
+    /**
+     * print lua stack, for debugging
+     * in: -
+     * out: -
+     */
     static int l_printStack(lua_State *L);
 };
 

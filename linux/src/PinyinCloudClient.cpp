@@ -76,10 +76,6 @@ void* requestThreadFunc(void *data) {
     pthread_exit(0);
 }
 
-/**
- * push a request to request queue, start a sub process to fetch result
- * callbackFunc can be NULL, fetchFunc can't
- */
 void PinyinCloudClient::request(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam) {
 
     // ignore empty string request
@@ -149,10 +145,6 @@ PinyinCloudClient::PinyinCloudClient() {
     pthread_rwlock_init(&requestsLock, NULL);
 }
 
-/**
- * read lock
- * this should not take a long time until readUnlock() !
- */
 void PinyinCloudClient::readLock() {
 
     DEBUG_PRINT(2, "[CLOUD] Read lock\n");
@@ -164,18 +156,12 @@ void PinyinCloudClient::readUnlock() {
     pthread_rwlock_unlock(&requestsLock);
 }
 
-/**
- * perform a read lock op before calling this.
- */
 const size_t PinyinCloudClient::getRequestCount() const {
 
     DEBUG_PRINT(3, "[CLOUD] getRequestCount: %d\n", requests.size());
     return requests.size();
 }
 
-/**
- * perform a read lock op before calling this.
- */
 const PinyinCloudRequest& PinyinCloudClient::getRequest(size_t index) const {
 
     DEBUG_PRINT(5, "[CLOUD] getRequest # %d\n", index);
@@ -201,9 +187,6 @@ void PinyinCloudClient::removeLastRequest() {
     pthread_rwlock_unlock(&requestsLock);
 }
 
-/**
- *  this is private and should not be used.
- */
 PinyinCloudClient::PinyinCloudClient(const PinyinCloudClient& orig) {
 }
 
