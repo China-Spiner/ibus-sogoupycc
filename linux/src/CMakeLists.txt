@@ -6,10 +6,10 @@ ELSE()
   SET(PKGDATADIR "${SHARE_INSTALL_PREFIX}/ibus-sogoupycc")
 ENDIF()
 
-ADD_EXECUTABLE(ibus-sogoupycc PinyinUtility.cpp;LuaBinding.cpp;PinyinCloudClient.cpp;engine.cpp;main.cpp)
+ADD_EXECUTABLE(ibus-sogoupycc PinyinUtility.cpp;LuaBinding.cpp;PinyinCloudClient.cpp;engine.cpp;XUtility.cpp;main.cpp)
 
 FIND_PACKAGE(PkgConfig)
-PKG_CHECK_MODULES(REQPKGS ibus-1.0>=1.2.0 lua>=5.1 glib-2.0>=2.22.3 gthread-2.0>=2.22.3 dbus-1>=1.2.16)
+PKG_CHECK_MODULES(REQPKGS ibus-1.0>=1.2.0 lua>=5.1 glib-2.0>=2.22.3 gthread-2.0>=2.22.3 dbus-1>=1.2.16 xmu>=1.0)
 
 SET_SOURCE_FILES_PROPERTIES(${SRCS} COMPILE_FLAGS "-pthread -DPKGDATADIR=${PKGDATADIR}")
 

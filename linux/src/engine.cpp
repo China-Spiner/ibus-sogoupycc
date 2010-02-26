@@ -13,6 +13,7 @@
 #include "defines.h"
 #include "engine.h"
 #include "LuaBinding.h"
+#include "XUtility.h"
 
 typedef struct _IBusSgpyccEngine IBusSgpyccEngine;
 typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
@@ -65,6 +66,7 @@ struct _IBusSgpyccEngine {
     pthread_mutex_t engineMutex;
     LuaBinding* luaBinding;
     PinyinCloudClient* cloudClient;
+    XUtility* xUtility;
 #define INVALID_COLOR -1
 };
 
@@ -108,6 +110,7 @@ static int l_sendRequest(lua_State* L);
 static int l_isIdle(lua_State* L);
 static int l_correct(lua_State* L);
 static int l_removeLastRequest(lua_State* L);
+static int l_getSelection(lua_State * L);
 
 // fetch functions
 string directFunc(void* data, const string& requestString);
@@ -175,6 +178,9 @@ static void engineInit(IBusSgpyccEngine *engine) {
     }
 
     pthread_mutexattr_destroy(&engineMutexAttr);
+
+    // x utility
+    engine->xUtility = new XUtility();
 
     // init lua binding
     engine->luaBinding = new LuaBinding();
@@ -245,6 +251,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->luaBinding->addFunction(l_isIdle, "isIdle");
     engine->luaBinding->addFunction(l_removeLastRequest, "removeLastRequest");
     engine->luaBinding->addFunction(l_correct, "correct");
+    engine->luaBinding->addFunction(l_getSelection, "getSelection");
 
     // load global config, per-user config will be loaded from there
     if (engine->luaBinding->doString("dofile('" PKGDATADIR "/config')")) {
@@ -267,8 +274,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
     // keys
     engine->engModeToggleKey = engine->luaBinding->getValue("engModeToggleKey", IBUS_Shift_L);
     engine->startCorrectionKey = engine->luaBinding->getValue("correctionKey", IBUS_Tab);
-    engine->pageDownKey = engine->luaBinding->getValue("pageDownKey", (int)';');
-    engine->pageUpKey = engine->luaBinding->getValue("pageUpKey", (int)'\'');
+    engine->pageDownKey = engine->luaBinding->getValue("pageDownKey", (int) ';');
+    engine->pageUpKey = engine->luaBinding->getValue("pageUpKey", (int) '\'');
 
     // config booleans
     engine->useDoublePinyin = engine->luaBinding->getValue("useDoublePinyin", true);
@@ -312,6 +319,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
 static void engineDestroy(IBusSgpyccEngine *engine) {
     DEBUG_PRINT(1, "[ENGINE] Destroy\n");
     l2Engine.erase(engine->luaBinding->getLuaState());
+    pthread_mutex_destroy(&engine->engineMutex);
     delete engine->luaBinding;
     delete engine->cloudClient;
     delete engine->fetcherPath;
@@ -319,11 +327,11 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     delete engine->tableLabelKeys;
     delete engine->preedit;
     delete engine->activePreedit;
+    delete engine->xUtility;
     if (engine->table) {
         g_object_unref(engine->table);
         engine->table = NULL;
     }
-    pthread_mutex_destroy(&engine->engineMutex);
     IBUS_OBJECT_CLASS(parentClass)->destroy((IBusObject *) engine);
 }
 
@@ -332,7 +340,7 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
 
     ENGINE_MUTEX_LOCK;
 
-    // for return value
+    // return value
     gboolean res = FALSE;
 
 engineProcessKeyEventStart:
@@ -870,7 +878,6 @@ static int l_isIdle(lua_State * L) {
     lua_checkstack(L, 1);
 
     engine->cloudClient->readLock();
-
     lua_pushboolean(L, engine->cloudClient->getRequestCount() == 0 && engine->luaBinding->getValue("preedit", "").length() == 0);
     engine->cloudClient->readUnlock();
 
@@ -887,4 +894,16 @@ static int l_removeLastRequest(lua_State * L) {
 
     engine->cloudClient->removeLastRequest();
     return 0;
+}
+
+/**
+ * get X selection
+ * in: none; out: string
+ */
+static int l_getSelection(lua_State * L) {
+    IBusSgpyccEngine* engine = l2Engine[L];
+    DEBUG_PRINT(2, "[ENGINE] l_removeLastRequest\n");
+    lua_checkstack(L, 1);
+    lua_pushstring(L, engine->xUtility->getSelection().c_str());
+    return 1;
 }
