@@ -1,14 +1,21 @@
 -- ibus-sogoupycc 配置文件
--- 注：此文件亦为 lua 脚本，以双减号开头的行以及被 --[[ 和 --]] 括起来的区域为注释，注释没有实际作用
--- 若此文件中有错误，输入法将报错并拒绝运行
+-- 注：
+-- 此文件亦为 lua 脚本，以双减号开头的行以及被 --[[ 和 --]] 括起来的区域为注释，注释没有实际作用
+-- 此文件在一个窗口切换到本输入法时被执行一次，若执行中发生错误，输入法将报错并拒绝运行
 
 -- 若用户配置文件（~/.ibus/sgpycc/config）存在，则只加载用户配置文件
 if not useUserConfig then local userConfig = os.getenv('HOME')..'/.ibus/sgpycc/config' local file = io.open(userConfig, 'r') if file then file:close() useUserConfig = true dofile(userConfig) return end end
 
+----------------------------------------------------
+-- 全局设置                                       --
+-- 此类设置对所有客户端（窗口）生效，只需运行一次 --
+----------------------------------------------------
 
--- 设置双拼布局，在声母部分使用 "-" 表示禁用，零声母使用
+if pycc.firstRun then
+-- 双拼布局，在声母部分使用 "-" 表示禁用，零声母使用""
 -- 默认：没有布局（无法使用双拼功能！），所以若要使用双拼功能，必须像下方一样指定一个布局
--- 注：目前仅支持26个英文字母组成的布局，不支持含有 ';' 的布局
+-- 注：双拼布局对所有客户端程序生效，只需要初始化一次
+-- 目前仅支持26个英文字母组成的布局，不支持含有 ';' 的布局
 
 -- 自然码布局（和微软拼音双拼布局不同之处很小：ing 由 y 键完成）
 pycc.setDoublePinyinScheme{
@@ -21,9 +28,18 @@ pycc.setDoublePinyinScheme{
 
 -- 显示调试信息级别（0 - 6）
 -- 默认：0，不显示任何调试信息
- pycc.DEBUG = 2
+-- pycc.setDebugLevel(2)
+end
 
--- 是否处于中文输入模式
+
+----------------------------------------------------
+-- 非全局设置                                     --
+-- 此类设置在不同的客户端内可以不同，每次都要运行 --
+-- 譬如，可以将颜色部分设为随机，则不同客户端程序 --
+-- （不同窗口）中将有不同的颜色                   --
+----------------------------------------------------
+
+-- 初始时是否处于中文输入模式
 -- 默认：false，处于中文模式
 -- pycc.engMode = false
 
@@ -35,18 +51,17 @@ pycc.setDoublePinyinScheme{
 -- 默认：Tab
 -- pycc.correctionKey = key.Tab
 
--- 纠正模式中向下，向上翻页按键
--- 默认：59 (";"), 39 ("'")
--- pycc.pageDownKey, pycc.pageUpKey = (';'):byte(), ("'"):byte()
-
 -- 是否使用双拼
 -- 默认：true，使用双拼（使用双拼必须使用pyy.setDoublePinyinScheme定义一个双拼布局）
 -- pycc.useDoublePinyin = true
 
 -- 纠正模式中选词可以用的选择按键（不能超过16个字符）
--- 默认："asdfghjkluiop"
--- 注：目前不支持 Ctrl、Alt 等特殊按键选词
--- pycc.labelKeys = "asdfghjkluiop"
+-- 默认："jkl;uiopasdf"
+-- pycc.labelKeys = "jkl;uiopasdf"
+
+-- 纠正模式中向下，向上翻页按键
+-- 默认：("h"), ("g")
+-- pycc.pageDownKey, pycc.pageUpKey = ('h'):byte(), ("g"):byte()
 
 -- 英文-中文标点映射表
 -- 默认：如下
@@ -82,10 +97,10 @@ requestCache = {
 -- 注：该脚本从命令行接受一个参数，将请求结果写到标准输出第一行中，
 -- 该脚本需处理超时情况，若出现错误，该脚本可以将接受的参数原封不动
 -- 输出，或者输出一空行
-pycc.fetcher = pycc.PKGDATADIR .. "/fetcher"
+-- pycc.fetcher = pycc.PKGDATADIR .. "/fetcher"
 
 -- 请求脚本返回文字的最大大小（字节，包括末尾\0）
 -- 默认：1024
-pycc.fetcherBufferSize = 1024
+-- pycc.fetcherBufferSize = 1024
 
 -- 尚有一些进阶设置未于此注出，geekers 请参考 http://code.google.com/p/ibus-sogoupycc/

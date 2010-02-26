@@ -75,6 +75,7 @@ struct _IBusSgpyccEngineClass {
 };
 
 static IBusEngineClass *parentClass = NULL;
+static bool engineFirstRun = true;
 
 // lock defines
 #define ENGINE_MUTEX_LOCK if (pthread_mutex_lock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex lock fail.\n"), exit(EXIT_FAILURE);
@@ -244,6 +245,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
 #undef LIB_NAME
     engine->luaBinding->setValue("COLOR_NOCHANGE", INVALID_COLOR);
     engine->luaBinding->setValue("PKGDATADIR", PKGDATADIR);
+    engine->luaBinding->setValue("firstRun", engineFirstRun);
+    engineFirstRun = false;
 
     // register functions
     engine->luaBinding->addFunction(l_commitText, "commit");
@@ -259,10 +262,6 @@ static void engineInit(IBusSgpyccEngine *engine) {
         exit(EXIT_FAILURE);
     }
 
-    // read in debug level globally
-    globalDebugLevel = engine->luaBinding->getValue("DEBUG", 0);
-    DEBUG_PRINT(1, "[ENGINE] Debug Level: %d\n", globalDebugLevel);
-
     // read in external script path
     engine->fetcherPath = new string(engine->luaBinding->getValue("fetcher", PKGDATADIR "/fetcher"));
     engine->convertingPinyins = new string("");
@@ -274,8 +273,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
     // keys
     engine->engModeToggleKey = engine->luaBinding->getValue("engModeToggleKey", IBUS_Shift_L);
     engine->startCorrectionKey = engine->luaBinding->getValue("correctionKey", IBUS_Tab);
-    engine->pageDownKey = engine->luaBinding->getValue("pageDownKey", (int) ';');
-    engine->pageUpKey = engine->luaBinding->getValue("pageUpKey", (int) '\'');
+    engine->pageDownKey = engine->luaBinding->getValue("pageDownKey", (int) 'h');
+    engine->pageUpKey = engine->luaBinding->getValue("pageUpKey", (int) 'g');
 
     // config booleans
     engine->useDoublePinyin = engine->luaBinding->getValue("useDoublePinyin", true);
@@ -291,7 +290,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->lastKeyval = 0;
 
     // labels used in lookup table, ibus has 16 chars limition.
-    engine->tableLabelKeys = new string(engine->luaBinding->getValue("labelKeys", "asdfghjkluiop"));
+    engine->tableLabelKeys = new string(engine->luaBinding->getValue("labelKeys", "jkl;uiopasdf"));
     if (engine->tableLabelKeys->length() > 16 || engine->tableLabelKeys->length() == 0) *engine->tableLabelKeys = engine->tableLabelKeys->substr(0, 16);
 
     // lookup table

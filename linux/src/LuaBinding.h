@@ -58,6 +58,7 @@ private:
     static int l_doubleToFullPinyin(lua_State *L);
     static int l_charsToPinyin(lua_State *L);
     static int l_isValidPinyin(lua_State *L);
+    static int l_setDebugLevel(lua_State *L);
 
     static int l_bitand(lua_State *L);
     static int l_bitor(lua_State *L);
