@@ -33,7 +33,7 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
     if (!db) return;
     string s = pinyins + " ";
     string queryWhere = "";
-    char idString[11], whereBuffer[64];
+    char idString[12], whereBuffer[128], limitBuffer[32];
 
     for (size_t pos = s.find(' '), lastPos = -1, id = 0; pos != string::npos; id++, lastPos = pos, pos = s.find(' ', pos + 1)) {
         // "chuang qian ming yue guang"
@@ -49,6 +49,11 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
         if (cid == PinyinDefines::PINYIN_ID_VOID) break;
 
         // build query and quey
+        if (limitCount > 0) {
+            snprintf(limitBuffer, sizeof (limitBuffer), " LIMIT %d", limitCount);
+        } else {
+            snprintf(limitBuffer, sizeof (limitBuffer), "");
+        }
         if (vid == PinyinDefines::PINYIN_ID_VOID) {
             snprintf(whereBuffer, sizeof (whereBuffer), "s%d=%d", id, cid);
         } else {
@@ -57,11 +62,11 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
 
         if (queryWhere != "") queryWhere += " AND ";
         queryWhere += whereBuffer;
-        
+
         string query = "SELECT phrase, freq FROM main.py_phrase_";
         query += idString;
         query += " WHERE ";
-        query += queryWhere + " GROUP BY phrase ORDER BY freq DESC";
+        query += queryWhere + " GROUP BY phrase ORDER BY freq DESC " + limitBuffer;
 
         sqlite3_stmt *stmt;
 
@@ -76,7 +81,8 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
                     double freq = sqlite3_column_double(stmt, 1) * weight * pow(id + 1, longPhraseAdjust);
                     candidateList.insert(pair<double, string > (freq, phase));
 
-                    if (limitCount > 0 && ++count >= limitCount) running = false;
+                    // do not quit abnormally
+                    // if (limitCount > 0 && ++count >= limitCount) running = false;
                     break;
                 }
                 case SQLITE_DONE:
@@ -195,7 +201,7 @@ void PinyinDatabase::getPinyinIDs(const string pinyin, int& consonantId, int& vo
     else if (vowel == "un") vowelId = PinyinDefines::PINYIN_ID_UN;
     else if (vowel == "uo") vowelId = PinyinDefines::PINYIN_ID_UO;
     else if (vowel == "v") vowelId = PinyinDefines::PINYIN_ID_V;
-    //else if (vowel == "ng") vowelId = PinyinDefines::PINYIN_ID_VOID;
+        //else if (vowel == "ng") vowelId = PinyinDefines::PINYIN_ID_VOID;
     else {
         vowelId = PinyinDefines::PINYIN_ID_VOID;
         if (consonantId == PinyinDefines::PINYIN_ID_ZERO)

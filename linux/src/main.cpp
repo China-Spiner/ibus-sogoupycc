@@ -93,6 +93,7 @@ void signalHandler(int signal) {
 #endif
             fprintf(stderr, "  -- SIGSEGV handler\n");
             fflush(stderr);
+            ibus_quit();
             exit(EXIT_FAILURE);
     }
 }
