@@ -57,6 +57,7 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
 
         if (queryWhere != "") queryWhere += " AND ";
         queryWhere += whereBuffer;
+        
         string query = "SELECT phrase, freq FROM main.py_phrase_";
         query += idString;
         query += " WHERE ";
@@ -173,9 +174,11 @@ void PinyinDatabase::getPinyinIDs(const string pinyin, int& consonantId, int& vo
     else if (vowel == "i") vowelId = PinyinDefines::PINYIN_ID_I;
     else if (vowel == "ia") vowelId = PinyinDefines::PINYIN_ID_IA;
     else if (vowel == "ian") vowelId = PinyinDefines::PINYIN_ID_IAN;
+    else if (vowel == "iang") vowelId = PinyinDefines::PINYIN_ID_IANG;
     else if (vowel == "iao") vowelId = PinyinDefines::PINYIN_ID_IAO;
     else if (vowel == "ie") vowelId = PinyinDefines::PINYIN_ID_IE;
     else if (vowel == "in") vowelId = PinyinDefines::PINYIN_ID_IN;
+    else if (vowel == "ing") vowelId = PinyinDefines::PINYIN_ID_ING;
     else if (vowel == "iong") vowelId = PinyinDefines::PINYIN_ID_IONG;
     else if (vowel == "iu") vowelId = PinyinDefines::PINYIN_ID_IU;
     else if (vowel == "o") vowelId = PinyinDefines::PINYIN_ID_O;
@@ -192,11 +195,11 @@ void PinyinDatabase::getPinyinIDs(const string pinyin, int& consonantId, int& vo
     else if (vowel == "un") vowelId = PinyinDefines::PINYIN_ID_UN;
     else if (vowel == "uo") vowelId = PinyinDefines::PINYIN_ID_UO;
     else if (vowel == "v") vowelId = PinyinDefines::PINYIN_ID_V;
-    else if (vowel == "ng") vowelId = PinyinDefines::PINYIN_ID_VOID;
+    //else if (vowel == "ng") vowelId = PinyinDefines::PINYIN_ID_VOID;
     else {
+        vowelId = PinyinDefines::PINYIN_ID_VOID;
         if (consonantId == PinyinDefines::PINYIN_ID_ZERO)
             consonantId = PinyinDefines::PINYIN_ID_VOID;
-        vowelId = PinyinDefines::PINYIN_ID_VOID;
     }
 }
 
