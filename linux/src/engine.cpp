@@ -80,6 +80,9 @@ struct _IBusSgpyccEngine {
     IBusPropList *propList;
     IBusProperty *engModeProp;
 
+    // selection timeout tolerance
+    long long selectionMaxTimout;
+
     // database confs
     int dbResultLimit;
     string* dbOrder;
@@ -338,13 +341,13 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->requestedForeColor = engine->luaBinding->getValue("requestedForeColor", 0x00C97F);
     engine->requestedBackColor = engine->luaBinding->getValue("requestedBackColor", INVALID_COLOR);
 
+    // selection timeout set, user passed here is second
+    engine->selectionMaxTimout = (long long) engine->luaBinding->getValue("selectionTimeout", 5.0) * 1000000;
+
     // properties
     engine->propList = ibus_prop_list_new();
     engine->engModeProp = ibus_property_new("engMode", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     ibus_prop_list_append(engine->propList, engine->engModeProp);
-
-    // start monitoring selection
-    XUtility::staticInit();
 
     DEBUG_PRINT(1, "[ENGINE] Init completed\n");
 }
@@ -596,6 +599,9 @@ engineProcessKeyEventStart:
                                 // since ibus doesn't provide a method to get selected text,
                                 // use this currently, it does add some dependencies and may has some issues ...
                                 string selection = XUtility::getSelection();
+                                long long selectionTimeout = XUtility::getCurrentTime() - XUtility::getSelectionUpdatedTime();
+                                if (selectionTimeout > engine->selectionMaxTimout) selection = "";
+                                
                                 // selection may be up to date, then check
                                 if (selection.length() > 0 && selection.find('\n') == string::npos) {
                                     IBusText *emptyText = ibus_text_new_from_static_string("");

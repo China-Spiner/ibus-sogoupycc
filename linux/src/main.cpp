@@ -79,37 +79,40 @@ static void init(int mode) {
             ibus_bus_request_name(bus, "org.freedesktop.IBus.sgycc", 0);
             break;
     }
-
+    ibus_quit();
     g_object_unref(component);
 }
 
 void signalHandler(int signal) {
     switch (signal) {
         case SIGSEGV:
-            #ifdef DEBUG
-            fprintf(stderr, "segmentation fault in thread 0x%x (main thread: 0x%x)\nprogram possibly stopped at: %s Line %d, thread 0x%x.\n", (int)pthread_self(), mainThread, debugCurrentSourceFile, debugCurrentSourceLine, debugCurrentThread);
-            #else
+#ifdef DEBUG
+            fprintf(stderr, "segmentation fault in thread 0x%x (main thread: 0x%x)\nprogram possibly stopped at: %s Line %d, thread 0x%x.\n", (int) pthread_self(), mainThread, debugCurrentSourceFile, debugCurrentSourceLine, debugCurrentThread);
+#else
             fprintf(stderr, "segmentation fault\nno program possibly stop information.\nrecompile with -DDEBUG to get some useful information.");
-            #endif
+#endif
             fprintf(stderr, "  -- SIGSEGV handler\n");
             fflush(stderr);
             exit(EXIT_FAILURE);
     }
-    
 }
 
-int main(int argc, char const *argv[]) {
+int main(int argc, char *argv[]) {
+    // call dbus and glib, gdk multi thread init functions
+    g_thread_init(NULL);
+    gdk_threads_init();
+    dbus_threads_init_default();
+
+    // gdk and gtk init
+    gdk_init(&argc, &argv);
+    gtk_init(&argc, &argv);
+
     mainThread = pthread_self();
 
-    //printf("\"%s\"",PinyinUtility::charactersToPinyins("我们在这里输入汉字，Microsoft Pinyin是微软拼音输入法.").c_str());
-    //return 0;
-    
-    // call dbus and glib multi thread init functions
-    g_thread_init(NULL);
-    dbus_threads_init_default();
-    
-    UNUSED(argv);
+    // selection clipboard monitor
+    XUtility::staticInit();
     signal(SIGSEGV, signalHandler);
+
     // simple argc parser
     if (argc > 1) {
         init(2);
@@ -120,7 +123,7 @@ int main(int argc, char const *argv[]) {
     ibus_main();
     DEBUG_PRINT(1, "[MAIN] Exiting...\n");
     XUtility::staticDestruct();
-    
+
     return 0;
 }
 
