@@ -247,7 +247,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
                 ['.'] = '。', [','] = '，', ['^'] = '……', ['@'] = '·', ['!'] = '！', ['~'] = '～', \
                 ['?'] = '？', ['#'] = '＃', ['$'] = '￥', ['&'] = '＆', ['('] = '（', [')'] = '）', \
                 ['{'] = '｛', ['}'] = '｝', ['['] = '［', [']'] = '］', [';'] = '；', [':'] = '：', \
-                ['<'] = '《', ['>'] = '》', \
+                ['<'] = '《', ['>'] = '》', ['\\\\'] = '、' \
                 [\"'\"] = { 2, '‘', '’'}, ['\"'] = { 2, '“', '”'} }\n"
             LIB_NAME ".getPunc = function(keychr) \
                 if " LIB_NAME ".puncMap[keychr] then \
@@ -374,8 +374,8 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
 static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, guint32 keycode, guint32 state) {
     DEBUG_PRINT(1, "[ENGINE] ProcessKeyEvent(%d, %d, 0x%x)\n", keyval, keycode, state);
 
-    // ENGINE_MUTEX_LOCK;
-    // return value
+    ENGINE_MUTEX_LOCK;
+
     gboolean res = FALSE;
 
 engineProcessKeyEventStart:
@@ -525,7 +525,6 @@ engineProcessKeyEventStart:
             res = TRUE;
         }
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
-
 
     } else { // (engine->convertingPinyins->length() == 0)
         ibus_engine_hide_lookup_table((IBusEngine*) engine);
@@ -693,7 +692,7 @@ engineProcessKeyEventStart:
             }
         } // if (res == 0)
     }
-    // ENGINE_MUTEX_UNLOCK;
+    ENGINE_MUTEX_UNLOCK;
 
     // update preedit
     if (res) engineUpdatePreedit(engine);
