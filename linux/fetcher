@@ -1,8 +1,8 @@
 #!/usr/bin/lua
 
-require 'luarocks.require'
-http = require 'socket.http'
-url = require 'socket.url'
+pcall(function() require 'luarocks.require' end)
+http = require('socket.http')
+url = require('socket.url')
 
 http.TIMEOUT = 5
 http.USERAGENT =  "ibus-sogoupycc"
