@@ -2,6 +2,10 @@
  * File:   PinyinDatabase.h
  * Author: WU Jun
  *
+ * February 28, 2010
+ *  fix 'ing', 'iang' not regonised issue
+ * February 27, 2010
+ *  0.1.0 first release
  * February 27, 2010
  *  created. aim to implement simple reader to access ibus-pinyin 1.2.99 seriese main databases
  *  one PinyinDatabase links to one database file

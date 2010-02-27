@@ -2,6 +2,8 @@
  * File:   PinyinUtility.h
  * Author: WU Jun <quark@lihdd.net>
  *
+ * February 27, 2010
+ *  0.1.0 first release
  * February 19, 2010
  *  extended to PinyinUtility. originally DoublePinyin Utility.
  * February 6, 2010

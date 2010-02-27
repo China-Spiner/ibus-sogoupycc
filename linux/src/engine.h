@@ -2,6 +2,8 @@
  * File:   engine.h
  * Author: WU Jun <quark@lihdd.net>
  *
+ * February 27, 2010
+ *  0.1.0 first release
  * November 3, 2009
  *  created
  */

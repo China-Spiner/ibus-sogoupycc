@@ -1,12 +1,14 @@
 /* 
  * File:   PinyinCloudClient.h
  * Author: WU Jun <quark@lihdd.net>
- *
+ * 
+ * February 27, 2010
+ *  0.1.0 first release
  * February 6, 2010
  *  created, reimplement original buggy c code (sogoupycc.{c,h})
  *  this class mantains multi-thread requests to remote server.
  *  a request is done via external script for flexibility.
- * as designed, it should instantiate a engine class.
+ *  as designed, it should instantiate a engine class.
  */
 
 #ifndef _PinyinCloudClient_H

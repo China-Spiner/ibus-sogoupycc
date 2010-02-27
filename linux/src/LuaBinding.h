@@ -2,8 +2,10 @@
  * File:   LuaBinding.h
  * Author: WU Jun <quark@lihdd.net>
  * 
+ * February 27, 2010
+ *  0.1.0 first release
  * February 9, 2010
- *  created, new.
+ *  created.
  *  i move much code to external lua configure script to gain flexibility.
  *  as designed, it should be instantiated once by each ibus engine.
  */
