@@ -25,11 +25,6 @@
 
 int globalDebugLevel = 0;
 
-char debugCurrentSourceFile[2048];
-int debugCurrentSourceLine;
-int debugCurrentThread;
-int mainThread;
-
 static IBusBus *bus = NULL; // Connect with IBus daemon.
 static IBusFactory *factory = NULL;
 
@@ -79,26 +74,16 @@ static void init(int mode) {
             ibus_bus_request_name(bus, "org.freedesktop.IBus.sgycc", 0);
             break;
     }
-    ibus_quit();
     g_object_unref(component);
 }
 
-void signalHandler(int signal) {
-    switch (signal) {
-        case SIGSEGV:
-#ifdef DEBUG
-            fprintf(stderr, "segmentation fault in thread 0x%x (main thread: 0x%x)\nprogram possibly stopped at: %s Line %d, thread 0x%x.\n", (int) pthread_self(), mainThread, debugCurrentSourceFile, debugCurrentSourceLine, debugCurrentThread);
-#else
-            fprintf(stderr, "segmentation fault\nno program possibly stop information.\nrecompile with -DDEBUG to get some useful information.");
-#endif
-            fprintf(stderr, "  -- SIGSEGV handler\n");
-            fflush(stderr);
-            ibus_quit();
-            exit(EXIT_FAILURE);
-    }
-}
-
 int main(int argc, char *argv[]) {
+    // redirect output
+    if (getenv("SGPYZCC_REDIRECT_OUTPUT")) {
+        freopen("/tmp/.sgpycc.out", "w", stdout);
+        freopen("/tmp/.sgpycc.err", "w", stderr);
+    }
+
     // call dbus and glib, gdk multi thread init functions
     g_thread_init(NULL);
     gdk_threads_init();
@@ -108,11 +93,8 @@ int main(int argc, char *argv[]) {
     gdk_init(&argc, &argv);
     gtk_init(&argc, &argv);
 
-    mainThread = pthread_self();
-
     // selection clipboard monitor
     XUtility::staticInit();
-    signal(SIGSEGV, signalHandler);
 
     // simple argc parser
     if (argc > 1) {
@@ -122,8 +104,12 @@ int main(int argc, char *argv[]) {
     }
 
     ibus_main();
-    DEBUG_PRINT(1, "[MAIN] Exiting...\n");
+
+    DEBUG_PRINT(1, "[MAIN] Exiting from ibus_main() ...\n");
+
+    // clean up static vars
     XUtility::staticDestruct();
+    LuaBinding::staticDestruct();
 
     return 0;
 }

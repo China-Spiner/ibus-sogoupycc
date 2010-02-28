@@ -1,7 +1,9 @@
 /* 
  * File:   defines.h
  * Author: WU Jun <quark@lihdd.net>
- *
+ * 
+ * February 28, 2010
+ *  0.1.1 major bugs fixed
  * February 27, 2010
  *  0.1.0 first release
  * February 14, 2010
@@ -23,24 +25,11 @@ extern "C" {
 #endif
 
 #ifndef VERSION
-#define VERSION "0.1.0"
+#define VERSION "0.1.1"
 #endif
 
-// debug vars
-#define DEBUG
-
-// for debug
+// for debugging
 extern int globalDebugLevel;
-
-#ifdef DEBUG
-extern char debugCurrentSourceFile[2048];
-extern int debugCurrentSourceLine;
-extern int debugCurrentThread;
-extern int mainThread;
-#define DEBUG_UPDATE_EXECUTE_POSITION strcpy(debugCurrentSourceFile, __FILE__), debugCurrentSourceLine = __LINE__, debugCurrentThread = pthread_self();
-#else
-#define DEBUG_UPDATE_EXECUTE_POSITION ;
-#endif
 
 #define DEBUG_PRINT(level, ...) if (globalDebugLevel >= level) fprintf(stderr, "[DEBUG] L%03d (thread 0x%x): ", __LINE__, (int)pthread_self()),fprintf(stderr,__VA_ARGS__),fflush(stderr);
 

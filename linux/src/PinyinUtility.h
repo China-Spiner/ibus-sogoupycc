@@ -1,7 +1,9 @@
 /* 
  * File:   PinyinUtility.h
  * Author: WU Jun <quark@lihdd.net>
- *
+ * 
+ * February 28, 2010
+ *  0.1.1 major bugs fixed
  * February 27, 2010
  *  0.1.0 first release
  * February 19, 2010
@@ -68,6 +70,7 @@ private:
 };
 
 // DoublePinyinScheme
+
 class DoublePinyinScheme {
 public:
     DoublePinyinScheme();

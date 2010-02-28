@@ -239,6 +239,17 @@ LuaBinding::LuaBinding() {
 
 }
 
+void LuaBinding::staticDestruct() {
+    DEBUG_PRINT(1, "[LUABIND] Static Destroy\n");
+    // close dbs
+    for (map<string, PinyinDatabase*>::iterator it = pinyinDatabases.begin(); it != pinyinDatabases.end(); ++it) {
+        if (it->second) {
+            delete it->second;
+            it->second = NULL;
+        }
+    }    
+}
+
 const lua_State* LuaBinding::getLuaState() const {
 
     return L;
@@ -499,11 +510,4 @@ LuaBinding::~LuaBinding() {
     luaStates.erase(L);
     lua_close(L);
     pthread_mutex_destroy(&luaStateMutex);
-    // close dbs
-    for (map<string, PinyinDatabase*>::iterator it = pinyinDatabases.begin(); it != pinyinDatabases.end(); ++it) {
-        if (it->second) {
-            delete it->second;
-            it->second = NULL;
-        }
-    }
 }

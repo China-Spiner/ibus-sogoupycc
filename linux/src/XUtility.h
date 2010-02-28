@@ -1,8 +1,9 @@
 /*
  * File:   XUtility.cpp
  * Author: WU Jun <quark@lihdd.net>
- *
+ * 
  * February 28, 2010
+ *  0.1.1 major bugs fixed
  *  add debug output, use gtk callback update instead of X loop checking
  *  now no relation with xclip
  * February 27, 2010
@@ -30,6 +31,7 @@
 using std::string;
 
 // all static
+
 class XUtility {
 public:
     static const string getSelection();
@@ -52,6 +54,7 @@ private:
     static bool running;
     static void* gtkMainLoop(void*);
     static void* updateSelection();
+    static void* updateSelectionThread(void*);
 };
 
 #endif	/* _XUTILITY_H */

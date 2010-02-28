@@ -1,7 +1,10 @@
 /* 
  * File:   LuaBinding.h
  * Author: WU Jun <quark@lihdd.net>
- * 
+ *
+ * February 28, 2010
+ *  0.1.1 major bugs fixed
+ *  do not unload dbs in ~LuaBinding
  * February 27, 2010
  *  0.1.0 first release
  * February 9, 2010
@@ -10,8 +13,8 @@
  *  as designed, it should be instantiated once by each ibus engine.
  */
 
-#ifndef _LUAIBUSBINDING_H
-#define	_LUAIBUSBINDING_H
+#ifndef _LUABINDING_H
+#define	_LUABINDING_H
 
 extern "C" {
 #include <lua.h>
@@ -47,9 +50,14 @@ public:
     void addFunction(const lua_CFunction func, const char * funcName);
 
     const lua_State* getLuaState() const;
-    
+
     static DoublePinyinScheme doublePinyinScheme;
     static map<string, PinyinDatabase*> pinyinDatabases;
+    /**
+     * clean up static vars.
+     * now it is to close dbs.
+     */
+    static void staticDestruct();
 private:
     LuaBinding(const LuaBinding& orig);
     pthread_mutex_t luaStateMutex;

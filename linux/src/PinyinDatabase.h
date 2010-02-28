@@ -3,6 +3,7 @@
  * Author: WU Jun
  *
  * February 28, 2010
+ *  0.1.1 major bugs fixed
  *  fix 'ing', 'iang' not regonised issue
  * February 27, 2010
  *  0.1.0 first release

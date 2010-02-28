@@ -1,7 +1,9 @@
 /* 
  * File:   PinyinCloudClient.h
  * Author: WU Jun <quark@lihdd.net>
- * 
+ *
+ * February 28, 2010
+ *  0.1.1 major bugs fixed
  * February 27, 2010
  *  0.1.0 first release
  * February 6, 2010

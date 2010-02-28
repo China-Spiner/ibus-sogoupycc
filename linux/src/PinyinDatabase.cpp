@@ -5,12 +5,15 @@
  * see .h file for changelog
  */
 
-#include "PinyinDatabase.h"
 #include <cstdio>
 #include <cmath>
 #include <unistd.h>
 
+#include "PinyinDatabase.h"
+#include "defines.h"
+
 PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
+    DEBUG_PRINT(1, "[PYDB] PinyinDatabase(%s, %.2lf)\n", dbPath.c_str(), weight);
     this->weight = weight;
     if (dbPath.length() == 0) db = NULL;
     else if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
@@ -22,7 +25,10 @@ PinyinDatabase::PinyinDatabase(const PinyinDatabase& orig) {
 }
 
 PinyinDatabase::~PinyinDatabase() {
-    if (db) sqlite3_close(db);
+    DEBUG_PRINT(1, "[PYDB] ~PinyinDatabase\n");
+    if (db) {
+        if (sqlite3_close(db) == SQLITE_OK) db = NULL;
+    }
 }
 
 const bool PinyinDatabase::isDatabaseOpened() const {
@@ -30,7 +36,10 @@ const bool PinyinDatabase::isDatabaseOpened() const {
 }
 
 void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, const int limitCount, const double longPhraseAdjust) {
+    DEBUG_PRINT(3, "[PYDB] query: %s\n", pinyins.c_str());
+
     if (!db) return;
+
     string s = pinyins + " ";
     string queryWhere = "";
     char idString[12], whereBuffer[128], limitBuffer[32];
@@ -44,6 +53,8 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
 
         snprintf(idString, sizeof (idString), "%d", id);
 
+        DEBUG_PRINT(5, "[PYDB] for length = %d, pinyin = %s\n", id + 1, pinyin.c_str());
+
         int cid, vid;
         PinyinDatabase::getPinyinIDs(pinyin, cid, vid);
         if (cid == PinyinDefines::PINYIN_ID_VOID) break;
@@ -52,7 +63,7 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
         if (limitCount > 0) {
             snprintf(limitBuffer, sizeof (limitBuffer), " LIMIT %d", limitCount);
         } else {
-            snprintf(limitBuffer, sizeof (limitBuffer), "");
+            limitBuffer[0] = '\0';
         }
         if (vid == PinyinDefines::PINYIN_ID_VOID) {
             snprintf(whereBuffer, sizeof (whereBuffer), "s%d=%d", id, cid);
@@ -68,11 +79,12 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
         query += " WHERE ";
         query += queryWhere + " GROUP BY phrase ORDER BY freq DESC " + limitBuffer;
 
+        DEBUG_PRINT(5, "[PYDB] query SQL: %s\n", query.c_str());
+
         sqlite3_stmt *stmt;
 
         if (sqlite3_prepare_v2(db, query.c_str(), query.length(), &stmt, NULL) != SQLITE_OK) break;
 
-        int count = 0;
         for (bool running = true; running;) {
             switch (sqlite3_step(stmt)) {
                 case SQLITE_ROW:
@@ -81,7 +93,7 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
                     double freq = sqlite3_column_double(stmt, 1) * weight * pow(id + 1, longPhraseAdjust);
                     candidateList.insert(pair<double, string > (freq, phase));
 
-                    // do not quit abnormally
+                    // do not quit abnormally, use LIMIT in sql query
                     // if (limitCount > 0 && ++count >= limitCount) running = false;
                     break;
                 }
@@ -90,15 +102,26 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
                     running = false;
                     break;
                 }
-                default:
+                case SQLITE_BUSY:
                 {
                     // sleep a short time, say, 64 ms
                     usleep(64000);
                 }
+                case SQLITE_MISUSE:
+                {
+                    fprintf(stderr, "sqlite3_step() misused.\nthis should not happen.");
+                    running = false;
+                    break;
+                }
+                case SQLITE_ERROR: default:
+                {
+                    fprintf(stderr, "sqlite3_step() error: %s\n (ignored).\n", sqlite3_errmsg(db));
+                    running = false;
+                    break;
+                }
             }
         }
         sqlite3_finalize(stmt);
-
 
         if (vid == PinyinDefines::PINYIN_ID_VOID) break;
     }

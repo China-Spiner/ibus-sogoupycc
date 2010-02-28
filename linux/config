@@ -42,7 +42,7 @@ dbs:close()
 
 -- 显示调试信息级别 (0 - 6)
 -- 默认：0，不显示任何调试信息
--- pycc.setDebugLevel(2)
+-- pycc.setDebugLevel(4)
 end
 
 
@@ -157,11 +157,13 @@ requestCache = {
 -- pycc.requestingForeColor, pycc.requestingBackColor = pycc.COLOR_NOCHANGE, 0xB8CFE5
 -- pycc.requestedForeColor, pycc.requestedBackColor = 0x00C97F, pycc.COLOR_NOCHANGE
 
+
 -- 纠正模式 --------------------------------------------------------------------
 
 -- 超时，当选择一段新的文字之后，如果超过这个时间，则再按纠正热键也不会起作用
 -- 默认： 5.0， 5 秒钟后超时
 -- pycc.selectionTimeout = 5.0
+
 
 -- Note ------------------------------------------------------------------------
 

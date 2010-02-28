@@ -512,14 +512,20 @@ engineProcessKeyEventStart:
                                 cInserted.insert(it->second);
                             }
                         }
+                        if (cInserted.size() == 0) {
+                            // put a dummy one
+                            IBusText* dummyCandidate = ibus_text_new_from_string("?");
+                            ibus_lookup_table_append_candidate(engine->table, dummyCandidate);
+                            g_object_unref(dummyCandidate);
+                        }
                         break;
                     }
                 } // for dborder
             // still zero result? put a dummy one
             if (ibus_lookup_table_get_number_of_candidates(engine->table) == 0) {
-                IBusText* candidate = ibus_text_new_from_string("-");
-                ibus_lookup_table_append_candidate(engine->table, candidate);
-                g_object_unref(candidate);
+                IBusText* dummyCandidate = ibus_text_new_from_string("-");
+                ibus_lookup_table_append_candidate(engine->table, dummyCandidate);
+                g_object_unref(dummyCandidate);
             }
             IBusText* text = ibus_text_new_from_string(pinyin.c_str());
             ibus_engine_update_auxiliary_text((IBusEngine*) engine, text, TRUE);
@@ -601,7 +607,7 @@ engineProcessKeyEventStart:
                                 string selection = XUtility::getSelection();
                                 long long selectionTimeout = XUtility::getCurrentTime() - XUtility::getSelectionUpdatedTime();
                                 if (selectionTimeout > engine->selectionMaxTimout) selection = "";
-                                
+
                                 // selection may be up to date, then check
                                 if (selection.length() > 0 && selection.find('\n') == string::npos) {
                                     IBusText *emptyText = ibus_text_new_from_static_string("");
