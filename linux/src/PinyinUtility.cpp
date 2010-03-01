@@ -44,7 +44,7 @@ const string PinyinUtility::separatePinyins(const string& pinyins) {
                 // this should help to avoid some greedy failure case
                 string nextOne;
                 if (unparsedPinyins.length() > i) nextOne = unparsedPinyins.substr(i, 1);
-                if (nextOne == "" || isValidPartialPinyin(nextOne)) {
+                if (nextOne == "" || nextOne == "'" || nextOne == " " || isValidPartialPinyin(nextOne) ) {
                     r += unparsedPinyins.substr(0, i);
                     unparsedPinyins.erase(0, i);
                     breaked = true;
