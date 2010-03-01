@@ -8,8 +8,21 @@ ENDIF()
 
 ADD_EXECUTABLE(ibus-sogoupycc PinyinUtility.cpp;LuaBinding.cpp;PinyinDatabase.cpp;PinyinCloudClient.cpp;engine.cpp;XUtility.cpp;main.cpp)
 
+# Archlinux, OS X use 'lua' as pkg-config name
+# While debian/ubuntu uses 'lua5.1'
+# FreeBSD may use 'lua-5.1'
+# we will detect which one to use
+
 FIND_PACKAGE(PkgConfig)
-PKG_CHECK_MODULES(REQPKGS REQUIRED ibus-1.0>=1.2.0;ibus-1.0<=1.2.98;lua>=5.1;lua<=5.1.99;glib-2.0>=2.22;gthread-2.0>=2.22;dbus-1>=1.2;sqlite3;gtk+-2.0;gdk-2.0)
+PKG_SEARCH_MODULE(LUA51 REQUIRED lua5.1 lua-5.1 lua)
+IF(LUA-5.1_FOUND)
+  SET(LUAMODULE "lua-5.1")
+ELSEIF(LUA5.1_FOUND)
+  SET(LUAMODULE "lua5.1")
+ELSE()
+  SET(LUAMODULE "lua")
+ENDIF()
+PKG_CHECK_MODULES(REQPKGS REQUIRED ibus-1.0>=1.2.0.20100111;ibus-1.0<=1.2.98;${LUAMODULE}>=5.1;${LUAMODULE}<=5.1.99;glib-2.0>=2.22;gthread-2.0>=2.22;dbus-1>=1.2;sqlite3;gtk+-2.0;gdk-2.0)
 
 SET_SOURCE_FILES_PROPERTIES(${SRCS} COMPILE_FLAGS "-pthread -DPKGDATADIR=${PKGDATADIR}")
 

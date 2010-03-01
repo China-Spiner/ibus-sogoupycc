@@ -7,18 +7,17 @@ url = require('socket.url')
 http.TIMEOUT = 5
 http.USERAGENT =  "ibus-sogoupycc"
 
-local py = arg[1] or 'kong bai'
+local py, retry = arg[1] or 'kong bai', 2
 py = py:gsub(" ","'"):gsub("[^a-z']", '')
 
-local ret = http.request('http://web.pinyin.sogou.com/web_ime/get_ajax/'..py..'.key')
-
-if ret and ret:match('ime_query_res="([^"]*)"') then
-	local res = url.unescape(ret:match('ime_query_res="([^"]*)"'))
-	if res then
-		io.write(res:match('(.-)：'))
+while retry > 0 do
+	local ret = http.request('http://web.pinyin.sogou.com/web_ime/get_ajax/'..py..'.key')
+	if ret and ret:match('ime_query_res="([^"]*)"') then
+		local res = url.unescape(ret:match('ime_query_res="([^"]*)"'))
+		if res then io.write(res:match('(.-)：')) return end
 	end
-else
-	io.write(py:gsub("'",' '),'')
+	retry = retry - 1
 end
+io.write('\n')
 
 --socket.sleep(math.random(10))
