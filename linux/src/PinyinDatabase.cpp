@@ -57,6 +57,8 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
 
         int cid, vid;
         PinyinDatabase::getPinyinIDs(pinyin, cid, vid);
+
+        // consonant not available, stop here
         if (cid == PinyinDefines::PINYIN_ID_VOID) break;
 
         // build query and quey
@@ -65,6 +67,8 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
         } else {
             limitBuffer[0] = '\0';
         }
+
+        // vowel not available, only use consonant
         if (vid == PinyinDefines::PINYIN_ID_VOID) {
             snprintf(whereBuffer, sizeof (whereBuffer), "s%d=%d", id, cid);
         } else {
@@ -123,7 +127,8 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
         }
         sqlite3_finalize(stmt);
 
-        if (vid == PinyinDefines::PINYIN_ID_VOID) break;
+        // consonant not available, stop here
+        // if (cid == PinyinDefines::PINYIN_ID_VOID) break;
     }
 }
 

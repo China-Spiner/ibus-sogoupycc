@@ -297,7 +297,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->pageUpKey = engine->luaBinding->getValue("pageUpKey", (int) 'g');
 
     // config booleans
-    engine->useDoublePinyin = engine->luaBinding->getValue("useDoublePinyin", true);
+    engine->useDoublePinyin = engine->luaBinding->getValue("useDoublePinyin", false);
     engine->engMode = engine->luaBinding->getValue("engMode", false);
     engine->writeRequestCache = engine->luaBinding->getValue("writeRequestCache", true);
 
@@ -389,9 +389,16 @@ engineProcessKeyEventStart:
 
         int spacePosition = s.find(' ');
         string pinyin = s.substr(0, spacePosition);
+        bool isPinyinParsable;
+        
+        // for double pinyin, parse full pinyin
+        // for normal pinyin, parse partial pinyin
 
-        if (PinyinUtility::isValidPinyin(pinyin)) {
-            // valid pinyin, stop
+        if (engine->useDoublePinyin) isPinyinParsable = PinyinUtility::isValidPinyin(pinyin);
+        else isPinyinParsable = PinyinUtility::isValidPartialPinyin(pinyin);
+
+        if (isPinyinParsable) {
+            // parsable pinyin, stop
             break;
         } else {
             // not found, submit 'pinyin' (it is indeed not a valid pinyin)
@@ -409,7 +416,7 @@ engineProcessKeyEventStart:
         // try parse that pinyin (should parse successfully)
         string pinyin = s.substr(0, spacePosition);
 
-        assert(PinyinUtility::isValidPinyin(pinyin));
+        assert(PinyinUtility::isValidPartialPinyin(pinyin));
         if ((state & IBUS_RELEASE_MASK) == IBUS_RELEASE_MASK) {
             res = engine->lastProcessKeyResult;
         } else if (keyval == engine->pageDownKey) {
@@ -681,7 +688,7 @@ engineProcessKeyEventStart:
                         if (engine->useDoublePinyin) {
                             *engine->activePreedit = LuaBinding::doublePinyinScheme.query(*engine->preedit);
                         } else {
-                            *engine->activePreedit = *engine->preedit;
+                            *engine->activePreedit = PinyinUtility::separatePinyins(*engine->preedit);
                         }
                     }
 
@@ -934,7 +941,8 @@ string fetchFunc(void* data, const string & requestString) {
         pclose(fresponse);
 
         for (int p = strlen(response) - 1; p >= 0; p--) {
-            if (response[p] == '\n') response[p] = 0; else break;
+            if (response[p] == '\n') response[p] = 0;
+            else break;
         }
         res = response;
 

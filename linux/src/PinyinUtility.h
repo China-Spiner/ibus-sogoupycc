@@ -37,9 +37,16 @@ public:
     virtual ~PinyinUtility();
 
     static const bool isValidPinyin(const string& pinyin);
+    static const bool isValidPartialPinyin(const string& pinyin);
 
     static const string charactersToPinyins(const string& characters, bool includeTone = false);
     static const string getCandidates(const string& pinyin, int tone);
+    /**
+     * add essential space as seperator (greedy)
+     * "womenzaizheliparseerror" => "wo men zai zhe li pa r se er r o r"
+     */
+    static const string separatePinyins(const string& pinyins);
+    static const int VALID_PINYIN_MAX_LENGTH;
 
 private:
     PinyinUtility(const PinyinUtility& orig);
@@ -65,7 +72,9 @@ private:
 
     static map<string, string> gb2312pinyinMap;
     static multimap<string, map<string, string>::iterator> gb2312characterMap;
+
     static const set<string> validPinyins;
+    static set<string> validPartialPinyins;
     static void staticInitializer();
 };
 
@@ -85,6 +94,7 @@ public:
     const bool isKeyBinded(const char key);
 
     virtual ~DoublePinyinScheme();
+
 private:
     bool mapBuilt;
     map<char, pair<string, vector<string> > > bindedKeys;

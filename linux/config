@@ -60,9 +60,9 @@ end
 -- pycc.engMode = false
 
 -- 是否使用双拼
--- 默认：true，使用双拼
+-- 默认：false，使用全拼
 -- 注：使用双拼则须用 pyy.setDoublePinyinScheme 定义一个双拼方案
--- pycc.useDoublePinyin = false
+-- pycc.useDoublePinyin = true
 
 
 -- 字词库 ----------------------------------------------------------------------
