@@ -550,6 +550,9 @@ engineProcessKeyEventStart:
                     break;
                 case -1:
                 {
+                    // ignore some masks (Issue 8, Comment #11)
+                    state = state & (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_MOD4_MASK | IBUS_MOD5_MASK | IBUS_SUPER_MASK | IBUS_HYPER_MASK | IBUS_RELEASE_MASK | IBUS_META_MASK);
+                    
                     // fallback C key handler
                     engine->cloudClient->readLock();
                     int requestCount = engine->cloudClient->getRequestCount();
