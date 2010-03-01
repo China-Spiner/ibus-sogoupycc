@@ -137,9 +137,6 @@ void PinyinCloudClient::request(const string requestString, FetchFunc fetchFunc,
 
 PinyinCloudClient::PinyinCloudClient() {
     DEBUG_PRINT(1, "[CLOUD] Init\n");
-    // calling g_thread_init multi times is allowed.
-    // g_thread_init(NULL);
-    // dbus_threads_init_default();
     
     nextRequestId = 0;
     pthread_rwlock_init(&requestsLock, NULL);

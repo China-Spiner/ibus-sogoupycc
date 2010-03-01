@@ -35,11 +35,14 @@ using std::string;
 class XUtility {
 public:
     static const string getSelection();
+
     static const long long getSelectionUpdatedTime();
     static const long long getCurrentTime();
+
+    static long long MICROSECOND_PER_SECOND;
+
     static void staticDestruct();
     static void staticInit();
-
 private:
     XUtility();
     virtual ~XUtility();

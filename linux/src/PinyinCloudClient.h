@@ -77,6 +77,7 @@ private:
     deque<PinyinCloudRequest> requests;
     pthread_rwlock_t requestsLock;
     unsigned int nextRequestId;
+
 };
 
 

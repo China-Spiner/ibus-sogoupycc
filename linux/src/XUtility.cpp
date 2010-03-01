@@ -18,6 +18,8 @@ pthread_rwlock_t XUtility::selectionRwLock;
 bool XUtility::staticInited = false;
 bool XUtility::running = false;
 
+long long XUtility::MICROSECOND_PER_SECOND = 1000000;
+
 void* XUtility::gtkMainLoop(void*) {
     gtk_main();
     DEBUG_PRINT(1, "[XUTIL] gtk main loop exited\n");

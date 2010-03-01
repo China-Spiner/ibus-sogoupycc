@@ -61,8 +61,8 @@ struct _IBusSgpyccEngine {
     // convertingPinyins are pinyin string in preedit and should be choiced from left to right manually
     string* convertingPinyins;
 
-    // eng mode
-    bool engMode;
+    // eng mode, requesting (used to update requestingProp)
+    bool engMode, requesting;
 
     // mainly internally used by processKeyEvent
     gboolean lastProcessKeyResult;
@@ -79,6 +79,7 @@ struct _IBusSgpyccEngine {
     // prop list
     IBusPropList *propList;
     IBusProperty *engModeProp;
+    IBusProperty *requestingProp;
 
     // selection timeout tolerance
     long long selectionMaxTimout;
@@ -96,6 +97,10 @@ struct _IBusSgpyccEngineClass {
 
 static IBusEngineClass *parentClass = NULL;
 static bool engineFirstRun = true;
+
+// statistics (static vars, otherwise data may not enough)
+static int totalRequestCount = 0;
+static double totalResponseTime = .0;
 
 // lock defines
 #define ENGINE_MUTEX_LOCK if (pthread_mutex_lock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex lock fail.\n"), exit(EXIT_FAILURE);
@@ -300,6 +305,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->useDoublePinyin = engine->luaBinding->getValue("useDoublePinyin", false);
     engine->engMode = engine->luaBinding->getValue("engMode", false);
     engine->writeRequestCache = engine->luaBinding->getValue("writeRequestCache", true);
+    engine->requesting = false;
 
     // std::strings
     engine->preedit = new string("");
@@ -342,12 +348,15 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->requestedBackColor = engine->luaBinding->getValue("requestedBackColor", INVALID_COLOR);
 
     // selection timeout set, user passed here is second
-    engine->selectionMaxTimout = (long long) engine->luaBinding->getValue("selectionTimeout", 5.0) * 1000000;
+    engine->selectionMaxTimout = (long long) engine->luaBinding->getValue("selectionTimeout", 5.0) * XUtility::MICROSECOND_PER_SECOND;
 
     // properties
     engine->propList = ibus_prop_list_new();
-    engine->engModeProp = ibus_property_new("engMode", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+
     ibus_prop_list_append(engine->propList, engine->engModeProp);
+    ibus_prop_list_append(engine->propList, engine->requestingProp);
 
     DEBUG_PRINT(1, "[ENGINE] Init completed\n");
 }
@@ -390,7 +399,7 @@ engineProcessKeyEventStart:
         int spacePosition = s.find(' ');
         string pinyin = s.substr(0, spacePosition);
         bool isPinyinParsable;
-        
+
         // for double pinyin, parse full pinyin
         // for normal pinyin, parse partial pinyin
 
@@ -469,10 +478,9 @@ engineProcessKeyEventStart:
                     res = TRUE;
                 } else {
                     // normal character or phrase, commit it
-                    IBusText* text = ibus_text_new_from_string(candidate->text);
-                    int length = ibus_text_get_length(text);
-                    ibus_engine_commit_text((IBusEngine*) engine, text);
-                    g_object_unref(text);
+                    int length = g_utf8_strlen(candidate->text, -1);
+                    // use cloud client commit, do not direct commit !
+                    engine->cloudClient->request(candidate->text, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                     // remove pinyin section from commitingPinyins
                     for (int i = 0; i < length; ++i) engine->convertingPinyins->erase(0, (*(engine->convertingPinyins) + " ").find(' ') + 1);
                     // rescan, rebuild lookup table
@@ -676,6 +684,8 @@ engineProcessKeyEventStart:
                             if (punctuation.length() > 0) {
                                 // registered punctuation
                                 if (engine->preedit->length() > 0) {
+                                    engine->requesting = true;
+                                    engineUpdateProperties(engine);
                                     engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                                     *engine->preedit = "";
                                 }
@@ -698,6 +708,8 @@ engineProcessKeyEventStart:
                         break;
                     } else {
                         if (engine->preedit->length() > 0) {
+                            engine->requesting = true;
+                            engineUpdateProperties(engine);
                             engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                             *engine->preedit = "";
                             *engine->activePreedit = "";
@@ -724,9 +736,15 @@ engineProcessKeyEventStart:
 }
 
 static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName, guint propState) {
-    if (strcmp(propName, "engMode") == 0) {
+    if (strcmp(propName, "engModeIndicator") == 0) {
         engine->engMode = !engine->engMode;
         engineUpdateProperties(engine);
+    } else if (strcmp(propName, "requestingIndicator") == 0) {
+        // do smth here, such as show statistics ?
+        // show avg response time
+        char statisticsBuffer[1024];
+        snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n云服务器平均响应时间： %.3lf 秒 / 请求\n", totalResponseTime / totalRequestCount);
+        engine->cloudClient->request(statisticsBuffer, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     }
 }
 
@@ -735,6 +753,11 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
         ibus_property_set_icon(engine->engModeProp, PKGDATADIR "/icons/engmode-on.png");
     } else {
         ibus_property_set_icon(engine->engModeProp, PKGDATADIR "/icons/engmode-off.png");
+    }
+    if (engine->requesting) {
+        ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/requesting.png");
+    } else {
+        ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/idle.png");
     }
     ibus_engine_register_properties((IBusEngine*) engine, engine->propList);
 }
@@ -841,10 +864,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
 
     if (commitString.length() > 0) {
         IBusText *commitText = ibus_text_new_from_printf("%s", commitString.c_str());
-        //void(*prevSigsegvHandler) (int sig);
         if (commitText) {
-            // seems SEGMENTATION FAULT often happens here. I can not find the reason
-            // ibus_engine_commit_text thread safe ? seems so without lua -.-
             ibus_engine_commit_text((IBusEngine *) engine, commitText);
             g_object_unref(G_OBJECT(commitText));
         } else {
@@ -921,6 +941,13 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
 
     // pop finishedCount from requeset queue, no lock here, it's safe.
     engine->cloudClient->removeFirstRequest(finishedCount);
+
+    // update properties
+    if (requestCount - finishedCount <= 0 && engine->requesting) {
+        engine->requesting = false;
+        engineUpdateProperties(engine);
+    }
+
     ENGINE_MUTEX_UNLOCK;
 }
 
@@ -932,6 +959,10 @@ string fetchFunc(void* data, const string & requestString) {
 
     if (res.length() == 0) {
         char response[engine->fetcherBufferSize];
+
+        // for statistics
+        long long startMicrosecond = XUtility::getCurrentTime();
+
         FILE* fresponse = popen((*(engine->fetcherPath) + " '" + requestString + "'") .c_str(), "r");
         // IMPROVE: pipe may be closed during this read (say, a empty fetcher script)
         // this will cause program aborted.
@@ -940,10 +971,15 @@ string fetchFunc(void* data, const string & requestString) {
         fgets(response, sizeof (response), fresponse);
         pclose(fresponse);
 
+        // update statistics
+        totalRequestCount++;
+        totalResponseTime += (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
+
         for (int p = strlen(response) - 1; p >= 0; p--) {
             if (response[p] == '\n') response[p] = 0;
             else break;
         }
+
         res = response;
 
         if (res.length() == 0) res = requestString;
@@ -993,7 +1029,7 @@ static int l_sendRequest(lua_State * L) {
     luaL_checkstring(L, 1);
     IBusSgpyccEngine* engine = l2Engine[L];
     DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
-
+    engine->requesting = true;
     engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
 
     return 0; // return 0 value to lua code

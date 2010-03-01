@@ -120,7 +120,7 @@ const string PinyinUtility::charactersToPinyins(const string& characters, bool i
 
     for (size_t pos = 0; pos < characters.length();) {
         // each chinese character takes 3 bytes using UTF-8
-        // IMPOROVE: use glib to handle utf8 characters
+        // TODO: use glib to handle utf8 characters
         string character = characters.substr(pos, 3);
         multimap<string, map<string, string>::iterator >::iterator pinyinPair = gb2312characterMap.find(character);
         if (pinyinPair != gb2312characterMap.end()) {
