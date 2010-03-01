@@ -552,7 +552,7 @@ engineProcessKeyEventStart:
                 {
                     // ignore some masks (Issue 8, Comment #11)
                     state = state & (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_MOD4_MASK | IBUS_MOD5_MASK | IBUS_SUPER_MASK | IBUS_HYPER_MASK | IBUS_RELEASE_MASK | IBUS_META_MASK);
-                    
+
                     // fallback C key handler
                     engine->cloudClient->readLock();
                     int requestCount = engine->cloudClient->getRequestCount();
@@ -924,13 +924,19 @@ string fetchFunc(void* data, const string & requestString) {
     string res = engine->luaBinding->getValue(requestString.c_str(), "", "requestCache");
 
     if (res.length() == 0) {
-        //if (luaBinding->callLuaFunction(true, "fetch", "s>s", requestString.c_str(), &res)) res = "";
-        FILE* fresponse = popen((*(engine->fetcherPath) + " '" + requestString + "'") .c_str(), "r");
-
         char response[engine->fetcherBufferSize];
+        FILE* fresponse = popen((*(engine->fetcherPath) + " '" + requestString + "'") .c_str(), "r");
+        // IMPROVE: pipe may be closed during this read (say, a empty fetcher script)
+        // this will cause program aborted.
+
+        // fgets may read '\n' in, remove it.
         fgets(response, sizeof (response), fresponse);
-        res = response;
         pclose(fresponse);
+
+        for (int p = strlen(response) - 1; p >= 0; p--) {
+            if (response[p] == '\n') response[p] = 0; else break;
+        }
+        res = response;
 
         if (res.length() == 0) res = requestString;
         if (engine->writeRequestCache && requestString != res) {
