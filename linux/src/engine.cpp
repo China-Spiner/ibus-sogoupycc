@@ -402,7 +402,7 @@ engineProcessKeyEventStart:
             break;
         } else {
             // not found, submit 'pinyin' (it is indeed not a valid pinyin)
-            if (pinyin == "") pinyin += " ";
+            if (pinyin.empty()) pinyin += " ";
             engine->cloudClient->request(pinyin, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
             engine->convertingPinyins->erase(0, spacePosition + 1);
         }
@@ -825,7 +825,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     size_t finishedCount = 0;
 
     // this loop will commit front responed string, set preedit string and count finishedCount
-    string commitString = "";
+    string commitString;
     for (size_t i = 0; i < requestCount; ++i) {
         const PinyinCloudRequest& request = engine->cloudClient->getRequest(i);
         if (!request.responsed) canCommitToClient = false;

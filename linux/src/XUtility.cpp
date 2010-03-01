@@ -10,7 +10,7 @@
 GtkClipboard *XUtility::primaryClipboard;
 
 long long XUtility::updatedTime;
-string XUtility::currentSelection = "";
+string XUtility::currentSelection;
 
 pthread_t XUtility::gtkMainLoopThread;
 pthread_rwlock_t XUtility::selectionRwLock;

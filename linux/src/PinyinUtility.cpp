@@ -28,14 +28,14 @@ PinyinUtility::~PinyinUtility() {
 const string PinyinUtility::separatePinyins(const string& pinyins) {
     staticInitializer();
 
-    string r = "";
+    string r;
     string unparsedPinyins = pinyins;
 
     // greedy failure case: "leni", greedy: "len i", should be: "le ni"
     // so try to bring back the last one
 
     // match unparsedPinyins as long as possible in partialPinyin
-    while (unparsedPinyins != "") {
+    while (!unparsedPinyins.empty()) {
         if (r.length() > 0 && r.data()[r.length() - 1] != ' ') r += ' ';
         bool breaked = false;
         for (int i = VALID_PINYIN_MAX_LENGTH; i > 0; --i) {
@@ -44,7 +44,7 @@ const string PinyinUtility::separatePinyins(const string& pinyins) {
                 // this should help to avoid some greedy failure case
                 string nextOne;
                 if (unparsedPinyins.length() > i) nextOne = unparsedPinyins.substr(i, 1);
-                if (nextOne == "" || nextOne == "'" || nextOne == " " || isValidPartialPinyin(nextOne) ) {
+                if (nextOne.empty() || nextOne == "'" || nextOne == " " || isValidPartialPinyin(nextOne)) {
                     r += unparsedPinyins.substr(0, i);
                     unparsedPinyins.erase(0, i);
                     breaked = true;
@@ -116,7 +116,7 @@ const string PinyinUtility::getCandidates(const string& pinyin, int tone) {
 const string PinyinUtility::charactersToPinyins(const string& characters, bool includeTone) {
     staticInitializer();
 
-    string pinyins = "", unregonised = "";
+    string pinyins, unregonised;
 
     for (size_t pos = 0; pos < characters.length();) {
         // each chinese character takes 3 bytes using UTF-8
@@ -125,6 +125,7 @@ const string PinyinUtility::charactersToPinyins(const string& characters, bool i
         multimap<string, map<string, string>::iterator >::iterator pinyinPair = gb2312characterMap.find(character);
         if (pinyinPair != gb2312characterMap.end()) {
             if (unregonised.length() > 0) {
+                // if it is partical pinyin, it will be converted, no additional space
                 if (pinyins.length() > 0) pinyins += " ";
                 pinyins += unregonised;
                 unregonised = "";
@@ -134,9 +135,19 @@ const string PinyinUtility::charactersToPinyins(const string& characters, bool i
             else pinyins += pinyinPair->second->first.substr(0, pinyinPair->second->first.length() - 1);
             pos += 3;
         } else {
-            // unregonised, only take 1 character
+            // unregonised, only take 1 character, buffered
             if (characters[pos] == ' ') {
-                if (unregonised.length() > 1 && unregonised[unregonised.length() - 1] != ' ') unregonised += ' ';
+                // add space when necessary
+                if (unregonised.length() > 1 && unregonised[unregonised.length() - 1] != ' ') {
+                    // if it is partical pinyin, do not add space
+                    size_t lastPinyinPos = unregonised.find_last_of(' ', unregonised.length() - 1);
+
+                    if (lastPinyinPos == string::npos) lastPinyinPos = 0;
+                    else lastPinyinPos++;
+
+                    string possibleParticalPinyin = unregonised.substr(lastPinyinPos, unregonised.length() - lastPinyinPos);
+                    if (!isValidPartialPinyin(possibleParticalPinyin)) unregonised += ' ';
+                }
             }
             unregonised += characters[pos];
             pos++;
@@ -144,6 +155,8 @@ const string PinyinUtility::charactersToPinyins(const string& characters, bool i
     }
     if (unregonised.length() > 0) {
         if (pinyins.length() > 0) pinyins += " ";
+        if (isValidPartialPinyin(unregonised.substr(0, unregonised.length() - 1)))
+            unregonised.erase(unregonised.length() - 1, 1);
         pinyins += unregonised;
         unregonised = "";
     }
@@ -185,7 +198,7 @@ const string DoublePinyinScheme::query(const char firstKey, const char secondKey
 }
 
 const string DoublePinyinScheme::query(const string& doublePinyinString) {
-    string result = "";
+    string result;
     char keys[2];
     int p = 0;
     for (size_t i = 0; i < doublePinyinString.length(); ++i) {

@@ -41,7 +41,7 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
     if (!db) return;
 
     string s = pinyins + " ";
-    string queryWhere = "";
+    string queryWhere;
     char idString[12], whereBuffer[128], limitBuffer[32];
 
     for (size_t pos = s.find(' '), lastPos = -1, id = 0; pos != string::npos; id++, lastPos = pos, pos = s.find(' ', pos + 1)) {
@@ -75,7 +75,7 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
             snprintf(whereBuffer, sizeof (whereBuffer), "s%d=%d AND y%d=%d", id, cid, id, vid);
         }
 
-        if (queryWhere != "") queryWhere += " AND ";
+        if (!queryWhere.empty()) queryWhere += " AND ";
         queryWhere += whereBuffer;
 
         string query = "SELECT phrase, freq FROM main.py_phrase_";
@@ -126,15 +126,12 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
             }
         }
         sqlite3_finalize(stmt);
-
-        // consonant not available, stop here
-        // if (cid == PinyinDefines::PINYIN_ID_VOID) break;
     }
 }
 
 void PinyinDatabase::getPinyinIDs(const string pinyin, int& consonantId, int& vowelId) {
     // IMPROVE: use efficiant lookup method
-    if (pinyin == "") {
+    if (pinyin.empty()) {
         consonantId = vowelId = PinyinDefines::PINYIN_ID_VOID;
         return;
     }
