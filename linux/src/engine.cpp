@@ -655,6 +655,9 @@ engineProcessKeyEventStart:
                                 *engine->preedit = "";
                                 handled = true;
                             }
+                        } else if (keyval == IBUS_Return) {
+                            // since IBUS_Return != '\n', handle this.
+                            keychrs = "\n";
                         } else if (keyval == IBUS_space) {
                             if (engine->preedit->length() > 0) {
                                 // eat this space if we are going to commit preedit
