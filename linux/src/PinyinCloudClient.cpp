@@ -79,7 +79,7 @@ void* requestThreadFunc(void *data) {
 void PinyinCloudClient::request(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam) {
 
     // ignore empty string request
-    if (requestString.length() == 0) return;
+    if (requestString.empty()) return;
 
     DEBUG_PRINT(2, "[CLOUD] new request: %s\n", requestString.c_str());
     PinyinCloudRequest *request = new PinyinCloudRequest;

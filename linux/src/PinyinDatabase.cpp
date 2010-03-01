@@ -15,7 +15,7 @@
 PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
     DEBUG_PRINT(1, "[PYDB] PinyinDatabase(%s, %.2lf)\n", dbPath.c_str(), weight);
     this->weight = weight;
-    if (dbPath.length() == 0) db = NULL;
+    if (dbPath.empty()) db = NULL;
     else if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
         db = NULL;
     }

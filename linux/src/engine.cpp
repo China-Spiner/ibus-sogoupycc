@@ -100,7 +100,9 @@ static bool engineFirstRun = true;
 
 // statistics (static vars, otherwise data may not enough)
 static int totalRequestCount = 0;
+static int totalFailedRequestCount = 0;
 static double totalResponseTime = .0;
+static double maximumResponseTime = .0;
 
 // lock defines
 #define ENGINE_MUTEX_LOCK if (pthread_mutex_lock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex lock fail.\n"), exit(EXIT_FAILURE);
@@ -743,7 +745,7 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName
         // do smth here, such as show statistics ?
         // show avg response time
         char statisticsBuffer[1024];
-        snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n云服务器平均响应时间： %.3lf 秒 / 请求\n", totalResponseTime / totalRequestCount);
+        snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n已发送请求: %d 个\n失败的请求: %d 个\n云服务器平均响应时间: %.3lf 秒\n云服务器最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
         engine->cloudClient->request(statisticsBuffer, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     }
 }
@@ -957,15 +959,15 @@ string fetchFunc(void* data, const string & requestString) {
 
     string res = engine->luaBinding->getValue(requestString.c_str(), "", "requestCache");
 
-    if (res.length() == 0) {
+    if (res.empty()) {
         char response[engine->fetcherBufferSize];
 
         // for statistics
         long long startMicrosecond = XUtility::getCurrentTime();
 
         FILE* fresponse = popen((*(engine->fetcherPath) + " '" + requestString + "'") .c_str(), "r");
-        // IMPROVE: pipe may be closed during this read (say, a empty fetcher script)
-        // this will cause program aborted.
+        // IMPROVE: pipe may be empty and closed during this read (say, a empty fetcher script)
+        // this will cause program to stop.
 
         // fgets may read '\n' in, remove it.
         fgets(response, sizeof (response), fresponse);
@@ -973,7 +975,9 @@ string fetchFunc(void* data, const string & requestString) {
 
         // update statistics
         totalRequestCount++;
-        totalResponseTime += (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
+        double requestTime = (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
+        totalResponseTime += requestTime;
+        if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
 
         for (int p = strlen(response) - 1; p >= 0; p--) {
             if (response[p] == '\n') response[p] = 0;
@@ -982,7 +986,11 @@ string fetchFunc(void* data, const string & requestString) {
 
         res = response;
 
-        if (res.length() == 0) res = requestString;
+        if (res.empty()) {
+            // empty, means fails
+            totalFailedRequestCount++;
+            res = requestString;
+        }
         if (engine->writeRequestCache && requestString != res) {
             engine->luaBinding->setValue(requestString.c_str(), res.c_str(), "requestCache");
         }
@@ -1061,7 +1069,7 @@ static int l_isIdle(lua_State * L) {
     lua_checkstack(L, 1);
 
     engine->cloudClient->readLock();
-    lua_pushboolean(L, engine->cloudClient->getRequestCount() == 0 && engine->luaBinding->getValue("preedit", "").length() == 0);
+    lua_pushboolean(L, engine->cloudClient->getRequestCount() == 0 && engine->luaBinding->getValue("preedit", "").empty());
     engine->cloudClient->readUnlock();
 
     return 1;

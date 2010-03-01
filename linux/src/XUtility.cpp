@@ -37,10 +37,9 @@ void XUtility::staticDestruct() {
 }
 
 void* XUtility::updateSelection() {
-    DEBUG_PRINT(5, "[XUTIL] selection update callback\n", currentSelection.c_str());
+    DEBUG_PRINT(5, "[XUTIL] selection update callback\n");
 
     if (gtk_clipboard_wait_is_text_available(primaryClipboard)) {
-        DEBUG_PRINT(5, "[XUTIL] locked, getting sel text\n", currentSelection.c_str());
         gchar *text = gtk_clipboard_wait_for_text(primaryClipboard);
         if (text) {
             pthread_rwlock_wrlock(&selectionRwLock);

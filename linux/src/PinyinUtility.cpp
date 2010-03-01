@@ -43,7 +43,7 @@ const string PinyinUtility::separatePinyins(const string& pinyins) {
                 // consider a futher step, next one ?
                 // this should help to avoid some greedy failure case
                 string nextOne;
-                if (unparsedPinyins.length() > i) nextOne = unparsedPinyins.substr(i, 1);
+                if (unparsedPinyins.length() > (size_t)i) nextOne = unparsedPinyins.substr(i, 1);
                 if (nextOne.empty() || nextOne == "'" || nextOne == " " || isValidPartialPinyin(nextOne)) {
                     r += unparsedPinyins.substr(0, i);
                     unparsedPinyins.erase(0, i);
@@ -207,7 +207,7 @@ const string DoublePinyinScheme::query(const string& doublePinyinString) {
             keys[p] = key;
             p ^= 1;
             if (p == 0) {
-                if (result.length() == 0)
+                if (result.empty())
                     result += query(keys[0], keys[1]);
                 else
                     result += " " + query(keys[0], keys[1]);
@@ -219,7 +219,7 @@ const string DoublePinyinScheme::query(const string& doublePinyinString) {
     if (p == 1) {
         if (result.length() > 0) result += " ";
         string consonant = bindedKeys[keys[0]].first;
-        if (consonant.length() == 0)
+        if (consonant.empty())
             result += "'";
         else result += consonant;
     }
@@ -232,7 +232,7 @@ const bool DoublePinyinScheme::isValidDoublePinyin(const string& doublePinyinStr
     for (size_t i = 0; i < doublePinyinString.length(); ++i) {
         keys[p++] = doublePinyinString[i];
         if (p == 2) {
-            if (query(keys[0], keys[1]).length() == 0) return false;
+            if (query(keys[0], keys[1]).empty()) return false;
             p = 0;
         }
     }
