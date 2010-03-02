@@ -146,7 +146,7 @@ requestCache = {
 -- pycc.fetcherBufferSize = 1024
 
 
--- 颜色 ------------------------------------------------------------------------
+-- 界面 ------------------------------------------------------------------------
 
 -- 颜色设定
 -- preedit 用于未提交拼音提示部分
@@ -158,6 +158,13 @@ requestCache = {
 -- pycc.requestingForeColor, pycc.requestingBackColor = pycc.COLOR_NOCHANGE, 0xB8CFE5
 -- pycc.requestedForeColor, pycc.requestedBackColor = 0x00C97F, pycc.COLOR_NOCHANGE
 -- pycc.correctingForeColor, pycc.correctingBackColor = pycc.COLOR_NOCHANGE, 0xEDBE7D
+
+-- 选词列表方向
+-- 0 横向，1 纵向，2 使用系统设置
+-- 默认： 2 使用系统设置
+-- 注：ibus 1.1.0.20100111 之前的版本，此选项无效
+-- pycc.tableOrientation = 2
+
 
 -- 纠正模式 --------------------------------------------------------------------
 
