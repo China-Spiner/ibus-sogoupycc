@@ -37,6 +37,7 @@ struct _IBusSgpyccEngine {
 
     // lookup table
     IBusLookupTable *table;
+    int candicateCount;
 
     // in lookup table, how many pages user has turned
     int tablePageNumber;
@@ -134,6 +135,10 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *prop_nam
 
 static void engineUpdatePreedit(IBusSgpyccEngine *engine);
 static void engineUpdateProperties(IBusSgpyccEngine * engine);
+
+// inline procedures
+inline static void engineClearLookupTable(IBusSgpyccEngine *engine);
+inline static void engineAppendLookupTable(IBusSgpyccEngine *engine, IBusText *candidate);
 
 // lua state to engine, to lookup IBusSgpyccEngine from a lua state
 static map<const lua_State*, IBusSgpyccEngine*> l2Engine;
@@ -330,148 +335,162 @@ static void engineInit(IBusSgpyccEngine *engine) {
     // lookup table
     engine->table = ibus_lookup_table_new(engine->tableLabelKeys->length(), 0, 0, 0);
 
-    // ibus_lookup_table_set_orientation() is not avaliable in ibus 1.2.0.20090927, provided by ubuntu
+    // ibus_lookup_table_set_orientation() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
 #ifdef IBUS_ORIENTATION_VERTICAL
-    ibus_lookup_table_set_orientation(engine->table, engine->luaBinding->getValue("tableOrientation", IBUS_ORIENTATION_VERTICAL);
+    ibus_lookup_table_set_orientation(engine->table, engine->luaBinding->getValue("tableOrientation", IBUS_ORIENTATION_VERTICAL));
 #endif
 
     for (size_t i = 0; i < engine->tableLabelKeys->length(); i++) {
         IBusText* text = ibus_text_new_from_printf("%c", engine->tableLabelKeys->data()[i]);
-                ibus_lookup_table_append_label(engine->table, text);
-                g_object_unref(text);
+        ibus_lookup_table_append_label(engine->table, text);
+        g_object_unref(text);
     }
 
     // punctuation map is stored in lua state, since it is complicated, do not store it here
 
     // database confs
     engine->dbResultLimit = engine->luaBinding->getValue("dbLimit", 64);
-            engine->dbLongPhraseAdjust = engine->luaBinding->getValue("dbPhraseAdjust", 1.0);
-            engine->dbOrder = new string(engine->luaBinding->getValue("dbOrder", ""));
+    engine->dbLongPhraseAdjust = engine->luaBinding->getValue("dbPhraseAdjust", 1.0);
+    engine->dbOrder = new string(engine->luaBinding->getValue("dbOrder", ""));
+
     if (engine->dbOrder->length() == 0) {
         if (LuaBinding::pinyinDatabases.size() > 0) *engine->dbOrder = "d";
 
         else *engine->dbOrder = "2";
-        }
+    }
 
     // read in colors (-1: use default)
     engine->preeditForeColor = engine->luaBinding->getValue("preeditForeColor", 0x0050FF);
-            engine->preeditBackColor = engine->luaBinding->getValue("preeditBackColor", INVALID_COLOR);
-            engine->requestingForeColor = engine->luaBinding->getValue("requestingForeColor", INVALID_COLOR);
-            engine->requestingBackColor = engine->luaBinding->getValue("requestingBackColor", 0xB8CFE5);
-            engine->requestedForeColor = engine->luaBinding->getValue("requestedForeColor", 0x00C97F);
-            engine->requestedBackColor = engine->luaBinding->getValue("requestedBackColor", INVALID_COLOR);
-            engine->correctingForeColor = engine->luaBinding->getValue("correctingForeColor", INVALID_COLOR);
-            engine->correctingBackColor = engine->luaBinding->getValue("correctingBackColor", 0xEDBE7D);
+    engine->preeditBackColor = engine->luaBinding->getValue("preeditBackColor", INVALID_COLOR);
+    engine->requestingForeColor = engine->luaBinding->getValue("requestingForeColor", INVALID_COLOR);
+    engine->requestingBackColor = engine->luaBinding->getValue("requestingBackColor", 0xB8CFE5);
+    engine->requestedForeColor = engine->luaBinding->getValue("requestedForeColor", 0x00C97F);
+    engine->requestedBackColor = engine->luaBinding->getValue("requestedBackColor", INVALID_COLOR);
+    engine->correctingForeColor = engine->luaBinding->getValue("correctingForeColor", INVALID_COLOR);
+    engine->correctingBackColor = engine->luaBinding->getValue("correctingBackColor", 0xEDBE7D);
 
-            // selection timeout set, user passed here is second
-            engine->selectionMaxTimout = (long long) engine->luaBinding->getValue("selectionTimeout", 5.0) * XUtility::MICROSECOND_PER_SECOND;
+    // selection timeout set, user passed here is second
+    engine->selectionMaxTimout = (long long) engine->luaBinding->getValue("selectionTimeout", 5.0) * XUtility::MICROSECOND_PER_SECOND;
 
-            // properties
-            engine->propList = ibus_prop_list_new();
-            engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
-            engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    // properties
+    engine->propList = ibus_prop_list_new();
+    engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
 
-            ibus_prop_list_append(engine->propList, engine->engModeProp);
-            ibus_prop_list_append(engine->propList, engine->requestingProp);
+    ibus_prop_list_append(engine->propList, engine->engModeProp);
+    ibus_prop_list_append(engine->propList, engine->requestingProp);
 
-            DEBUG_PRINT(1, "[ENGINE] Init completed\n");
+    DEBUG_PRINT(1, "[ENGINE] Init completed\n");
 }
 
 static void engineDestroy(IBusSgpyccEngine *engine) {
 
     DEBUG_PRINT(1, "[ENGINE] Destroy\n");
-            l2Engine.erase(engine->luaBinding->getLuaState());
-            pthread_mutex_destroy(&engine->engineMutex);
+    l2Engine.erase(engine->luaBinding->getLuaState());
+    pthread_mutex_destroy(&engine->engineMutex);
 
-            // delete strings
-            delete engine->luaBinding;
-            delete engine->cloudClient;
-            delete engine->fetcherPath;
-            delete engine->correctingPinyins;
-            delete engine->tableLabelKeys;
-            delete engine->preedit;
-            delete engine->activePreedit;
-            delete engine->dbOrder;
-            delete engine->commitedConvertingCharacters;
-            delete engine->commitedConvertingPinyins;
+    // delete strings
+    delete engine->luaBinding;
+    delete engine->cloudClient;
+    delete engine->fetcherPath;
+    delete engine->correctingPinyins;
+    delete engine->tableLabelKeys;
+    delete engine->preedit;
+    delete engine->activePreedit;
+    delete engine->dbOrder;
+    delete engine->commitedConvertingCharacters;
+    delete engine->commitedConvertingPinyins;
 
-            // unref g objects
+    // unref g objects
 #define DELETE_G_OBJECT(x) if(x != NULL) g_object_unref(x), x = NULL;
-            DELETE_G_OBJECT(engine->table);
-            DELETE_G_OBJECT(engine->propList);
-            DELETE_G_OBJECT(engine->engModeProp);
+    DELETE_G_OBJECT(engine->table);
+    DELETE_G_OBJECT(engine->propList);
+    DELETE_G_OBJECT(engine->engModeProp);
 #undef DELETE_G_OBJECT
-            IBUS_OBJECT_CLASS(parentClass)->destroy((IBusObject *) engine);
+    IBUS_OBJECT_CLASS(parentClass)->destroy((IBusObject *) engine);
+}
+
+// ibus_lookup_table_get_number_of_candidates() is not availalbe in ibus-1.2.0.20090927, provided by ubuntu 9.10
+// use these inline functions as alternative
+
+inline static void engineAppendLookupTable(IBusSgpyccEngine *engine, IBusText *candidate) {
+    ibus_lookup_table_append_candidate(engine->table, candidate);
+    engine->candicateCount++;
+}
+
+inline static void engineClearLookupTable(IBusSgpyccEngine *engine) {
+    ibus_lookup_table_clear(engine->table);
+    engine->candicateCount = 0;
 }
 
 static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, guint32 keycode, guint32 state) {
     DEBUG_PRINT(1, "[ENGINE] ProcessKeyEvent(%d, %d, 0x%x)\n", keyval, keycode, state);
 
-            ENGINE_MUTEX_LOCK;
+    ENGINE_MUTEX_LOCK;
 
-            gboolean res = FALSE;
+    gboolean res = FALSE;
 
-            engineProcessKeyEventStart :
-            // commit all non-pinyin part of convertingPinyins
+engineProcessKeyEventStart:
+    // commit all non-pinyin part of convertingPinyins
     while (engine->correctingPinyins->length() > 0) {
         // try parse that pinyin at left of convertingPinyins
         string s = *(engine->correctingPinyins) + " ";
 
-                int spacePosition = s.find(' ');
-                string pinyin = s.substr(0, spacePosition);
-                bool isPinyinParsable;
+        int spacePosition = s.find(' ');
+        string pinyin = s.substr(0, spacePosition);
+        bool isPinyinParsable;
 
-                // for double pinyin, parse full pinyin
-                // for normal pinyin, parse partial pinyin
+        // for double pinyin, parse full pinyin
+        // for normal pinyin, parse partial pinyin
 
         if (engine->useDoublePinyin) isPinyinParsable = PinyinUtility::isValidPinyin(pinyin);
         else isPinyinParsable = PinyinUtility::isValidPartialPinyin(pinyin);
 
-            if (isPinyinParsable) {
+        if (isPinyinParsable) {
             // parsable pinyin, stop
             break;
         } else {
             // not found, submit 'pinyin' (it is indeed not a valid pinyin)
             if (pinyin.empty()) pinyin += " ";
-                    engine->cloudClient->request(pinyin, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                    engine->correctingPinyins->erase(0, spacePosition + 1);
-            }
+            engine->cloudClient->request(pinyin, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+            engine->correctingPinyins->erase(0, spacePosition + 1);
+        }
     }
 
     if (engine->correctingPinyins->length() > 0) {
         // cut off pinyins, get leftmost pinyin
         string s = *(engine->correctingPinyins) + " ";
-                int spacePosition = s.find(' ');
+        int spacePosition = s.find(' ');
 
-                // try parse that pinyin (should parse successfully)
-                string pinyin = s.substr(0, spacePosition);
+        // try parse that pinyin (should parse successfully)
+        string pinyin = s.substr(0, spacePosition);
 
-                assert(PinyinUtility::isValidPartialPinyin(pinyin));
+        assert(PinyinUtility::isValidPartialPinyin(pinyin));
         if ((state & IBUS_RELEASE_MASK) == IBUS_RELEASE_MASK) {
             res = engine->lastProcessKeyResult;
         } else if (keyval == engine->pageDownKey) {
             enginePageDown(engine);
-                    res = TRUE;
+            res = TRUE;
         } else if (keyval == engine->pageUpKey) {
             enginePageUp(engine);
-                    res = TRUE;
+            res = TRUE;
         } else if (keyval == IBUS_Delete) {
             engine->correctingPinyins->erase(0, (*(engine->correctingPinyins) + " ").find(' ') + 1);
-                    keyval = 0;
-                    res = TRUE;
-                    ibus_lookup_table_clear(engine->table);
-                    goto engineProcessKeyEventStart;
+            keyval = 0;
+            res = TRUE;
+            engineClearLookupTable(engine);
+            goto engineProcessKeyEventStart;
         } else if (keyval == IBUS_Escape) {
             // cancel correcting
             engine->correctingPinyins->clear();
-                    engine->commitedConvertingCharacters->clear();
-                    engine->commitedConvertingPinyins->clear();
-                    goto engineProcessKeyEventStart;
+            engine->commitedConvertingCharacters->clear();
+            engine->commitedConvertingPinyins->clear();
+            goto engineProcessKeyEventStart;
         } else if (keyval == IBUS_BackSpace) {
             keyval = 0;
-                    res = TRUE;
-                    ibus_lookup_table_clear(engine->table);
-                    goto engineProcessKeyEventStart;
+            res = TRUE;
+            engineClearLookupTable(engine);
+            goto engineProcessKeyEventStart;
         } else {
             // test if user press a key that in lookup table
             size_t pos = engine->tableLabelKeys->find((char) keyval);
@@ -489,44 +508,48 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
                     // underlined, need 2nd select
                     // build new table according to selected
                     int l = ibus_text_get_length(candidate);
-                            // backup candidate before clear table
-                            IBusText *candidateCharacters = ibus_text_new_from_string(candidate->text);
-                            const gchar *utf8char = candidateCharacters->text;
-                            ibus_lookup_table_clear(engine->table);
+                    // backup candidate before clear table
+                    IBusText *candidateCharacters = ibus_text_new_from_string(candidate->text);
+                    const gchar *utf8char = candidateCharacters->text;
+                    engineClearLookupTable(engine);
 
                     for (int i = 0; i < l; ++i) {
                         IBusText *candidateCharacter = ibus_text_new_from_unichar(g_utf8_get_char(utf8char));
-                                ibus_lookup_table_append_candidate(engine->table, candidateCharacter);
-                                g_object_unref(candidateCharacter);
+                        engineAppendLookupTable(engine, candidateCharacter);
+                        g_object_unref(candidateCharacter);
                         if (i < l - 1) utf8char = g_utf8_next_char(utf8char);
-                        }
+                    }
                     g_object_unref(candidateCharacters);
-                            engine->tablePageNumber = 0;
-                            res = TRUE;
+                    engine->tablePageNumber = 0;
+                    res = TRUE;
                 } else {
                     // user select a phrase, commit it
                     int length = g_utf8_strlen(candidate->text, -1);
-                            // use cloud client commit, do not direct commit !
-                            engine->cloudClient->request(candidate->text, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                            // remove pinyin section from commitingPinyins
+                    // use cloud client commit, do not direct commit !
+                    engine->cloudClient->request(candidate->text, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                    // remove pinyin section from commitingPinyins
                     for (int i = 0; i < length; ++i) {
                         *engine->commitedConvertingPinyins += engine->correctingPinyins->substr(0, (*(engine->correctingPinyins) + " ").find(' ') + 1);
-                                engine->correctingPinyins->erase(0, (*(engine->correctingPinyins) + " ").find(' ') + 1);
+                        engine->correctingPinyins->erase(0, (*(engine->correctingPinyins) + " ").find(' ') + 1);
                     }
                     *engine->commitedConvertingCharacters += candidate->text;
-                            // rescan, rebuild lookup table
-                            ibus_lookup_table_clear(engine->table);
-                            keyval = 0;
-                            res = TRUE;
-                            goto engineProcessKeyEventStart;
+                    // rescan, rebuild lookup table
+                    engineClearLookupTable(engine);
+                    keyval = 0;
+                    res = TRUE;
+                    goto engineProcessKeyEventStart;
                 }
             }
         }
-        if (ibus_lookup_table_get_number_of_candidates(engine->table) == 0) {
+
+        // ibus_lookup_table_get_number_of_candidates() is not availalbe in ibus-1.2.0.20090927, provided by ubuntu 9.10
+        // if (ibus_lookup_table_get_number_of_candidates(engine->table) == 0) {
+        if (engine->candicateCount == 0) {
             // update and show lookup table
             // according to dbOrder
-            ibus_lookup_table_clear(engine->table);
-            for (const char *dbo = engine->dbOrder->c_str(); *dbo; ++dbo) switch (*dbo) {
+            engineClearLookupTable(engine);
+            for (const char *dbo = engine->dbOrder->c_str(); *dbo; ++dbo)
+                switch (*dbo) {
                     case '2':
                     {
                         // gb2312 internal db
@@ -534,10 +557,10 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
                             IBusText* candidate = ibus_text_new_from_string((PinyinUtility::getCandidates(pinyin, tone)).c_str());
                             if (ibus_text_get_length(candidate) > 1) {
                                 candidate->attrs = ibus_attr_list_new();
-                                        ibus_attr_list_append(candidate->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, 0, ibus_text_get_length(candidate)));
+                                ibus_attr_list_append(candidate->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, 0, ibus_text_get_length(candidate)));
                             }
-                            ibus_lookup_table_append_candidate(engine->table, candidate);
-                                    g_object_unref(candidate);
+                            engineAppendLookupTable(engine, candidate);
+                            g_object_unref(candidate);
                         }
                         break;
                     }
@@ -545,7 +568,7 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
                     {
                         // external db
                         CandidateList cl;
-                                set<string> cInserted;
+                        set<string> cInserted;
                         for (map<string, PinyinDatabase*>::iterator it = LuaBinding::pinyinDatabases.begin(); it != LuaBinding::pinyinDatabases.end(); ++it) {
                             it->second->query(*(engine->correctingPinyins), cl, engine->dbResultLimit, engine->dbLongPhraseAdjust);
                         }
@@ -553,31 +576,31 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
                             const string & candidate = it->second;
                             if (cInserted.find(candidate) == cInserted.end()) {
                                 IBusText* candidateText = ibus_text_new_from_string(it->second.c_str());
-                                        ibus_lookup_table_append_candidate(engine->table, candidateText);
-                                        g_object_unref(candidateText);
-                                        cInserted.insert(it->second);
+                                ibus_lookup_table_append_candidate(engine->table, candidateText);
+                                g_object_unref(candidateText);
+                                cInserted.insert(it->second);
                             }
                         }
                         if (cInserted.size() == 0) {
                             // put a dummy one
                             IBusText* dummyCandidate = ibus_text_new_from_string("?");
-                                    ibus_lookup_table_append_candidate(engine->table, dummyCandidate);
-                                    g_object_unref(dummyCandidate);
+                            engineAppendLookupTable(engine, dummyCandidate);
+                            g_object_unref(dummyCandidate);
                         }
                         break;
                     }
                 } // for dborder
             // still zero result? put a dummy one
-            if (ibus_lookup_table_get_number_of_candidates(engine->table) == 0) {
+            if (engine->candicateCount == 0) {
                 IBusText* dummyCandidate = ibus_text_new_from_string("-");
-                        ibus_lookup_table_append_candidate(engine->table, dummyCandidate);
-                        g_object_unref(dummyCandidate);
+                engineAppendLookupTable(engine, dummyCandidate);
+                g_object_unref(dummyCandidate);
             }
             IBusText* text = ibus_text_new_from_string(pinyin.c_str());
-                    ibus_engine_update_auxiliary_text((IBusEngine*) engine, text, TRUE);
-                    g_object_unref(text);
-                    engine->tablePageNumber = 0;
-                    res = TRUE;
+            ibus_engine_update_auxiliary_text((IBusEngine*) engine, text, TRUE);
+            g_object_unref(text);
+            engine->tablePageNumber = 0;
+            res = TRUE;
         }
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
 
@@ -590,12 +613,12 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
                 engine->luaBinding->setValue(engine->commitedConvertingPinyins->c_str(), engine->commitedConvertingCharacters->c_str(), "requestCache");
             }
             engine->commitedConvertingCharacters->clear();
-                    engine->commitedConvertingPinyins->clear();
+            engine->commitedConvertingPinyins->clear();
         }
 
         // hide lookup table
         ibus_engine_hide_lookup_table((IBusEngine*) engine);
-                ibus_engine_hide_auxiliary_text((IBusEngine*) engine);
+        ibus_engine_hide_auxiliary_text((IBusEngine*) engine);
 
         if (res == 0) {
             // try to use config logic to process key event
@@ -603,29 +626,29 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
                 case 0:
                     // lua function executed successfully, update engine->activePreedit ( = pycc.preedit in lua state ) and engmode
                     *(engine->activePreedit) = engine->luaBinding->getValue("preedit", engine->activePreedit->c_str());
-                            engine->engMode = engine->luaBinding->getValue("engMode", engine->engMode);
-                            engineUpdateProperties(engine);
+                    engine->engMode = engine->luaBinding->getValue("engMode", engine->engMode);
+                    engineUpdateProperties(engine);
                     break;
                 case -1:
                 {
                     // ignore some masks (Issue 8, Comment #11)
                     state = state & (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_MOD4_MASK | IBUS_MOD5_MASK | IBUS_SUPER_MASK | IBUS_HYPER_MASK | IBUS_RELEASE_MASK | IBUS_META_MASK);
 
-                            // fallback C key handler
-                            engine->cloudClient->readLock();
-                            int requestCount = engine->cloudClient->getRequestCount();
-                            engine->cloudClient->readUnlock();
+                    // fallback C key handler
+                    engine->cloudClient->readLock();
+                    int requestCount = engine->cloudClient->getRequestCount();
+                    engine->cloudClient->readUnlock();
 
-                            // normally do not handle release event, but watch for eng mode toggling
+                    // normally do not handle release event, but watch for eng mode toggling
                     if ((state & IBUS_RELEASE_MASK) == IBUS_RELEASE_MASK && engine->lastKeyval == keyval) {
                         if (keyval == engine->engModeToggleKey) {
                             engine->engMode = !engine->engMode;
                             if (engine->engMode) {
                                 *engine->preedit = "";
-                                        *engine->activePreedit = "";
+                                *engine->activePreedit = "";
                             }
                             engineUpdateProperties(engine);
-                                    res = TRUE;
+                            res = TRUE;
                             break;
                         }
                         res = engine->lastProcessKeyResult;
@@ -633,123 +656,123 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
                     }
                     engine->lastKeyval = keyval;
 
-                            // do not handle alt, ctrl ... event (such as Alt - F, Ctrl - T)
+                    // do not handle alt, ctrl ... event (such as Alt - F, Ctrl - T)
                     if (state != 0 && (state ^ IBUS_SHIFT_MASK) != 0) {
                         res = FALSE;
                         break;
                     }
 
                     bool handled = false;
-                            char keychr = (keyval < 128) ? keyval : 0;
-                            string keychrs = "";
+                    char keychr = (keyval < 128) ? keyval : 0;
+                    string keychrs = "";
                     if (keychr) keychrs += keychr;
 
-                            // in chinese mode ?
-                        if (!engine->engMode) {
-                            if (keyval == engine->startCorrectionKey) {
-                                // switch to editing mode
-                                if (!engine->preedit->empty()) {
-                                    // edit active preedit
-                                    *engine->preedit = "";
-                                            *engine->correctingPinyins = *engine->activePreedit;
-                                            *engine->activePreedit = "";
-                                            // clear candidates, prepare for new candidates
-                                            ibus_lookup_table_clear(engine->table);
-                                            keyval = 0;
-                                            handled = true;
-                                            goto engineProcessKeyEventStart;
-                                } else if (requestCount == 0) {
-                                    // no preedit, no pending requests, we are clear.
-                                    // try to edit selected text
-                                    // check selected text do not contain '\n' and is not empty
+                    // in chinese mode ?
+                    if (!engine->engMode) {
+                        if (keyval == engine->startCorrectionKey) {
+                            // switch to editing mode
+                            if (!engine->preedit->empty()) {
+                                // edit active preedit
+                                *engine->preedit = "";
+                                *engine->correctingPinyins = *engine->activePreedit;
+                                *engine->activePreedit = "";
+                                // clear candidates, prepare for new candidates
+                                engineClearLookupTable(engine);
+                                keyval = 0;
+                                handled = true;
+                                goto engineProcessKeyEventStart;
+                            } else if (requestCount == 0) {
+                                // no preedit, no pending requests, we are clear.
+                                // try to edit selected text
+                                // check selected text do not contain '\n' and is not empty
 
-                                    // since ibus doesn't provide a method to get selected text,
-                                    // use this currently, it does add some dependencies and may has some issues ...
-                                    string selection = XUtility::getSelection();
-                                            long long selectionTimeout = XUtility::getCurrentTime() - XUtility::getSelectionUpdatedTime();
-                                    if (selectionTimeout > engine->selectionMaxTimout) selection = "";
+                                // since ibus doesn't provide a method to get selected text,
+                                // use this currently, it does add some dependencies and may has some issues ...
+                                string selection = XUtility::getSelection();
+                                long long selectionTimeout = XUtility::getCurrentTime() - XUtility::getSelectionUpdatedTime();
+                                if (selectionTimeout > engine->selectionMaxTimout) selection = "";
 
-                                            // selection may be up to date, then check
-                                        if (selection.length() > 0 && selection.find('\n') == string::npos) {
-                                            IBusText *emptyText = ibus_text_new_from_static_string("");
-                                                    // delete selection
-                                                    ibus_engine_commit_text((IBusEngine*) engine, emptyText);
-                                                    *engine->correctingPinyins = PinyinUtility::charactersToPinyins(selection);
-                                                    keyval = 0;
-                                                    handled = true;
-                                                    goto engineProcessKeyEventStart;
-                                        }
-                                } else {
-                                    // user may want to edit last commited pinyin string due to slow network
-                                    // due to lock issues, this is not implemented now
-                                }
-                            } else if (keyval == IBUS_BackSpace) {
-                                // backspace, remove last char from preedit or cancel last request
-                                if (engine->preedit->length() > 0) {
-                                    engine->preedit->erase(engine->preedit->length() - 1, 1);
-                                            handled = true;
-                                } else {
-                                    if (requestCount > 0) {
-                                        engine->cloudClient->removeLastRequest();
-                                                handled = true;
-                                    }
-                                }
-                            } else if (keyval == IBUS_Escape) {
-                                if (engine->preedit->length() > 0) {
-                                    *engine->preedit = "";
-                                            handled = true;
-                                }
-                            } else if (keyval == IBUS_Return) {
-                                // since IBUS_Return != '\n', handle this.
-                                keychrs = "\n";
-                            } else if (keyval == IBUS_space) {
-                                if (engine->preedit->length() > 0) {
-                                    // eat this space if we are going to commit preedit
+                                // selection may be up to date, then check
+                                if (selection.length() > 0 && selection.find('\n') == string::npos) {
+                                    IBusText *emptyText = ibus_text_new_from_static_string("");
+                                    // delete selection
+                                    ibus_engine_commit_text((IBusEngine*) engine, emptyText);
+                                    *engine->correctingPinyins = PinyinUtility::charactersToPinyins(selection);
                                     keyval = 0;
-                                            keychrs = "";
+                                    handled = true;
+                                    goto engineProcessKeyEventStart;
                                 }
-                            } else if (keyval < 128) {
-                                // assuming that this is a pinyin char
-                                // double pinyin may use ';' while full pinyin may use '\''
-                                if (engine->useDoublePinyin) {
-                                    if (LuaBinding::doublePinyinScheme.isKeyBinded(keychr)) {
-                                        if (LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit + keychr)) {
-                                            *engine->preedit += keychr;
-                                                    handled = true;
-                                        }
-                                    }
-                                    if (keyval >= IBUS_a && keyval <= IBUS_z) handled = true;
-                                    } else if ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0)) {
-                                    if (keyval == '\'') keychr = ' ';
-                                            *engine->preedit += keychr;
-                                            handled = true;
-                                    }
-                            }
-
-                            if (!handled) {
-                                // check punctuation
-                                string punctuation = "";
-                                        engine->luaBinding->callLuaFunction("getPunc", "s>s", keychrs.c_str(), &punctuation);
-                                if (punctuation.length() > 0) {
-                                    // registered punctuation
-                                    if (engine->preedit->length() > 0) {
-                                        engine->requesting = true;
-                                                engineUpdateProperties(engine);
-                                                engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                                                *engine->preedit = "";
-                                    }
-                                    engine->cloudClient->request(punctuation, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                                            handled = true;
-                                }
-                            }
-
-                            // update active preedit
-                            if (engine->useDoublePinyin) {
-                                *engine->activePreedit = LuaBinding::doublePinyinScheme.query(*engine->preedit);
                             } else {
-                                *engine->activePreedit = PinyinUtility::separatePinyins(*engine->preedit);
+                                // user may want to edit last commited pinyin string due to slow network
+                                // due to lock issues, this is not implemented now
+                            }
+                        } else if (keyval == IBUS_BackSpace) {
+                            // backspace, remove last char from preedit or cancel last request
+                            if (engine->preedit->length() > 0) {
+                                engine->preedit->erase(engine->preedit->length() - 1, 1);
+                                handled = true;
+                            } else {
+                                if (requestCount > 0) {
+                                    engine->cloudClient->removeLastRequest();
+                                    handled = true;
+                                }
+                            }
+                        } else if (keyval == IBUS_Escape) {
+                            if (engine->preedit->length() > 0) {
+                                *engine->preedit = "";
+                                handled = true;
+                            }
+                        } else if (keyval == IBUS_Return) {
+                            // since IBUS_Return != '\n', handle this.
+                            keychrs = "\n";
+                        } else if (keyval == IBUS_space) {
+                            if (engine->preedit->length() > 0) {
+                                // eat this space if we are going to commit preedit
+                                keyval = 0;
+                                keychrs = "";
+                            }
+                        } else if (keyval < 128) {
+                            // assuming that this is a pinyin char
+                            // double pinyin may use ';' while full pinyin may use '\''
+                            if (engine->useDoublePinyin) {
+                                if (LuaBinding::doublePinyinScheme.isKeyBinded(keychr)) {
+                                    if (LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit + keychr)) {
+                                        *engine->preedit += keychr;
+                                        handled = true;
+                                    }
+                                }
+                                if (keyval >= IBUS_a && keyval <= IBUS_z) handled = true;
+                            } else if ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0)) {
+                                if (keyval == '\'') keychr = ' ';
+                                *engine->preedit += keychr;
+                                handled = true;
                             }
                         }
+
+                        if (!handled) {
+                            // check punctuation
+                            string punctuation = "";
+                            engine->luaBinding->callLuaFunction("getPunc", "s>s", keychrs.c_str(), &punctuation);
+                            if (punctuation.length() > 0) {
+                                // registered punctuation
+                                if (engine->preedit->length() > 0) {
+                                    engine->requesting = true;
+                                    engineUpdateProperties(engine);
+                                    engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                                    *engine->preedit = "";
+                                }
+                                engine->cloudClient->request(punctuation, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                                handled = true;
+                            }
+                        }
+
+                        // update active preedit
+                        if (engine->useDoublePinyin) {
+                            *engine->activePreedit = LuaBinding::doublePinyinScheme.query(*engine->preedit);
+                        } else {
+                            *engine->activePreedit = PinyinUtility::separatePinyins(*engine->preedit);
+                        }
+                    }
 
                     // eng mode or unhandled in chinese mode
                     if (handled || (requestCount == 0 && engine->preedit->length() == 0)) {
@@ -758,13 +781,13 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
                     } else {
                         if (engine->preedit->length() > 0) {
                             engine->requesting = true;
-                                    engineUpdateProperties(engine);
-                                    engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                                    *engine->preedit = "";
-                                    *engine->activePreedit = "";
+                            engineUpdateProperties(engine);
+                            engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                            *engine->preedit = "";
+                            *engine->activePreedit = "";
                         }
                         engine->cloudClient->request(keychrs, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                                res = TRUE;
+                        res = TRUE;
                         break;
                     }
                     break;
@@ -777,25 +800,25 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
     }
     ENGINE_MUTEX_UNLOCK;
 
-            // update preedit
+    // update preedit
     if (res) engineUpdatePreedit(engine);
 
-            engine->lastProcessKeyResult = res;
+    engine->lastProcessKeyResult = res;
 
-        return res;
-    }
+    return res;
+}
 
 static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName, guint propState) {
     if (strcmp(propName, "engModeIndicator") == 0) {
         engine->engMode = !engine->engMode;
-                engineUpdateProperties(engine);
+        engineUpdateProperties(engine);
     } else if (strcmp(propName, "requestingIndicator") == 0) {
         // do smth here, such as show statistics ?
         // show avg response time
 
         char statisticsBuffer[1024];
-                snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n已发送请求: %d 个\n失败的请求: %d 个\n云服务器平均响应时间: %.3lf 秒\n云服务器最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
-                engine->cloudClient->request(statisticsBuffer, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n已发送请求: %d 个\n失败的请求: %d 个\n云服务器平均响应时间: %.3lf 秒\n云服务器最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
+        engine->cloudClient->request(statisticsBuffer, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     }
 }
 
@@ -817,7 +840,7 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
 static void engineFocusIn(IBusSgpyccEngine * engine) {
 
     DEBUG_PRINT(2, "[ENGINE] FocusIn\n");
-            engineUpdateProperties(engine);
+    engineUpdateProperties(engine);
 }
 
 static void engineFocusOut(IBusSgpyccEngine * engine) {
@@ -833,28 +856,28 @@ static void engineReset(IBusSgpyccEngine * engine) {
 static void engineEnable(IBusSgpyccEngine * engine) {
 
     DEBUG_PRINT(1, "[ENGINE] Enable\n");
-            engine->enabled = true;
+    engine->enabled = true;
 }
 
 static void engineDisable(IBusSgpyccEngine * engine) {
 
     DEBUG_PRINT(1, "[ENGINE] Disable\n");
-            engine->enabled = false;
+    engine->enabled = false;
 }
 
 static void engineSetCursorLocation(IBusSgpyccEngine *engine, gint x, gint y, gint w, gint h) {
 
     DEBUG_PRINT(4, "[ENGINE] SetCursorLocation(%d, %d, %d, %d)\n", x, y, w, h);
-            engine->cursorArea.height = h;
-            engine->cursorArea.width = w;
-            engine->cursorArea.x = x;
-            engine->cursorArea.y = y;
+    engine->cursorArea.height = h;
+    engine->cursorArea.width = w;
+    engine->cursorArea.x = x;
+    engine->cursorArea.y = y;
 }
 
 static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
 
     DEBUG_PRINT(2, "[ENGINE] SetCapabilities(%u)\n", caps);
-            engine->clientCapabilities = caps;
+    engine->clientCapabilities = caps;
 }
 
 static void enginePageUp(IBusSgpyccEngine * engine) {
@@ -862,8 +885,8 @@ static void enginePageUp(IBusSgpyccEngine * engine) {
     if (engine->correctingPinyins->length() > 0) {
 
         if (ibus_lookup_table_page_up(engine->table)) engine->tablePageNumber--;
-                ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
-        }
+        ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
+    }
 }
 
 static void enginePageDown(IBusSgpyccEngine * engine) {
@@ -871,8 +894,8 @@ static void enginePageDown(IBusSgpyccEngine * engine) {
     if (engine->correctingPinyins->length() > 0) {
 
         if (ibus_lookup_table_page_down(engine->table)) engine->tablePageNumber++;
-                ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
-        }
+        ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
+    }
 }
 
 static void engineCursorUp(IBusSgpyccEngine * engine) {
@@ -880,7 +903,7 @@ static void engineCursorUp(IBusSgpyccEngine * engine) {
     if (engine->correctingPinyins->length() > 0) {
 
         ibus_lookup_table_cursor_up(engine->table);
-                ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
+        ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
 }
 
@@ -889,45 +912,45 @@ static void engineCursorDown(IBusSgpyccEngine * engine) {
     if (engine->correctingPinyins->length() > 0) {
 
         ibus_lookup_table_cursor_down(engine->table);
-                ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
+        ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
 }
 
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     // this function need a mutex lock, it will pop first several finished requests from cloudClient
     DEBUG_PRINT(1, "[ENGINE] Update Preedit\n");
-            ENGINE_MUTEX_LOCK;
+    ENGINE_MUTEX_LOCK;
 
-            engine->cloudClient->readLock();
-            size_t requestCount = engine->cloudClient->getRequestCount();
+    engine->cloudClient->readLock();
+    size_t requestCount = engine->cloudClient->getRequestCount();
 
-            // contains entire preedit text
-            string preedit;
+    // contains entire preedit text
+    string preedit;
 
-            // first few responsed requests can be commited, these two var count them
-            bool canCommitToClient = true;
-            size_t finishedCount = 0;
+    // first few responsed requests can be commited, these two var count them
+    bool canCommitToClient = true;
+    size_t finishedCount = 0;
 
-            // this loop will commit front responed string, set preedit string and count finishedCount
-            string commitString;
+    // this loop will commit front responed string, set preedit string and count finishedCount
+    string commitString;
     for (size_t i = 0; i < requestCount; ++i) {
         const PinyinCloudRequest& request = engine->cloudClient->getRequest(i);
         if (!request.responsed) canCommitToClient = false;
 
-            if (canCommitToClient) {
-                if (request.responseString.length() > 0) commitString += request.responseString;
-                        finishedCount++;
-                } else {
-                if (request.responsed) preedit += request.responseString;
-                else preedit += request.requestString;
-                }
+        if (canCommitToClient) {
+            if (request.responseString.length() > 0) commitString += request.responseString;
+            finishedCount++;
+        } else {
+            if (request.responsed) preedit += request.responseString;
+            else preedit += request.requestString;
+        }
     }
 
     if (commitString.length() > 0) {
         IBusText *commitText = ibus_text_new_from_printf("%s", commitString.c_str());
         if (commitText) {
             ibus_engine_commit_text((IBusEngine *) engine, commitText);
-                    g_object_unref(G_OBJECT(commitText));
+            g_object_unref(G_OBJECT(commitText));
         } else {
             fprintf(stderr, "[ERROR] can not create commitText.\n");
         }
@@ -942,36 +965,36 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
         activePreedit = *engine->correctingPinyins;
     }
     preedit += activePreedit;
-            DEBUG_PRINT(4, "[ENGINE.UpdatePreedit] preedit: %s\n", preedit.c_str());
+    DEBUG_PRINT(4, "[ENGINE.UpdatePreedit] preedit: %s\n", preedit.c_str());
 
-            // create IBusText-type preeditText
-            IBusText *preeditText;
-            preeditText = ibus_text_new_from_string(preedit.c_str());
-            preeditText->attrs = ibus_attr_list_new();
+    // create IBusText-type preeditText
+    IBusText *preeditText;
+    preeditText = ibus_text_new_from_string(preedit.c_str());
+    preeditText->attrs = ibus_attr_list_new();
 
-            // second loop will set color to preeditText
-            // note that '，' will be consided 1 char
-            size_t preeditLen = 0;
+    // second loop will set color to preeditText
+    // note that '，' will be consided 1 char
+    size_t preeditLen = 0;
     for (size_t i = finishedCount; i < requestCount; ++i) {
         const PinyinCloudRequest& request = engine->cloudClient->getRequest(i);
-                size_t currReqLen;
+        size_t currReqLen;
         if (request.responsed) {
             // responsed
             IBusText *text = ibus_text_new_from_string(request.responseString.c_str());
-                    currReqLen = ibus_text_get_length(text);
-                    g_object_unref(text);
-                    // colors
+            currReqLen = ibus_text_get_length(text);
+            g_object_unref(text);
+            // colors
             if (engine->requestedBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(engine->requestedBackColor, preeditLen, preeditLen + currReqLen));
-                if (engine->requestedForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->requestedForeColor, preeditLen, preeditLen + currReqLen));
-                } else {
+            if (engine->requestedForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->requestedForeColor, preeditLen, preeditLen + currReqLen));
+        } else {
             // requesting
             IBusText *text = ibus_text_new_from_string(request.requestString.c_str());
-                    currReqLen = ibus_text_get_length(text);
-                    g_object_unref(text);
-                    // colors
+            currReqLen = ibus_text_get_length(text);
+            g_object_unref(text);
+            // colors
             if (engine->requestingBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(engine->requestingBackColor, preeditLen, preeditLen + currReqLen));
-                if (engine->requestingForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->requestingForeColor, preeditLen, preeditLen + currReqLen));
-                }
+            if (engine->requestingForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->requestingForeColor, preeditLen, preeditLen + currReqLen));
+        }
         preeditLen += currReqLen;
     }
 
@@ -980,14 +1003,14 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     if (engine->correctingPinyins->length() > 0) {
         // for convertingPinyins, use requesting color instead
         if (engine->correctingBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(engine->correctingBackColor, preeditLen, ibus_text_get_length(preeditText)));
-            if (engine->correctingForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->correctingForeColor, preeditLen, ibus_text_get_length(preeditText)));
-            } else {
+        if (engine->correctingForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->correctingForeColor, preeditLen, ibus_text_get_length(preeditText)));
+    } else {
         if (engine->preeditBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(engine->preeditBackColor, preeditLen, ibus_text_get_length(preeditText)));
-            if (engine->preeditForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->preeditForeColor, preeditLen, ibus_text_get_length(preeditText)));
-            }
+        if (engine->preeditForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->preeditForeColor, preeditLen, ibus_text_get_length(preeditText)));
+    }
     ibus_attr_list_append(preeditText->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, preeditLen, ibus_text_get_length(preeditText)));
 
-            // finally, update preedit
+    // finally, update preedit
     if (engine->correctingPinyins->length() > 0) {
         // cursor at left of active preedit
         ibus_engine_update_preedit_text((IBusEngine *) engine, preeditText, preeditLen, TRUE);
@@ -998,16 +1021,16 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     // remember to unref text
     g_object_unref(preeditText);
 
-            engine->cloudClient->readUnlock();
+    engine->cloudClient->readUnlock();
 
-            // pop finishedCount from requeset queue, no lock here, it's safe.
-            engine->cloudClient->removeFirstRequest(finishedCount);
+    // pop finishedCount from requeset queue, no lock here, it's safe.
+    engine->cloudClient->removeFirstRequest(finishedCount);
 
-            // update properties
+    // update properties
     if (requestCount - finishedCount <= 0 && engine->requesting) {
 
         engine->requesting = false;
-                engineUpdateProperties(engine);
+        engineUpdateProperties(engine);
     }
 
     ENGINE_MUTEX_UNLOCK;
@@ -1015,45 +1038,45 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
 
 string fetchFunc(void* data, const string & requestString) {
     IBusSgpyccEngine* engine = (typeof (engine)) data;
-            DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
+    DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
 
-            string res = engine->luaBinding->getValue(requestString.c_str(), "", "requestCache");
+    string res = engine->luaBinding->getValue(requestString.c_str(), "", "requestCache");
 
     if (res.empty()) {
         char response[engine->fetcherBufferSize];
 
-                // for statistics
-                long long startMicrosecond = XUtility::getCurrentTime();
+        // for statistics
+        long long startMicrosecond = XUtility::getCurrentTime();
 
-                FILE* fresponse = popen((*(engine->fetcherPath) + " '" + requestString + "'") .c_str(), "r");
-                // IMPROVE: pipe may be empty and closed during this read (say, a empty fetcher script)
-                // this will cause program to stop.
+        FILE* fresponse = popen((*(engine->fetcherPath) + " '" + requestString + "'") .c_str(), "r");
+        // IMPROVE: pipe may be empty and closed during this read (say, a empty fetcher script)
+        // this will cause program to stop.
 
-                // fgets may read '\n' in, remove it.
-                fgets(response, sizeof (response), fresponse);
-                pclose(fresponse);
+        // fgets may read '\n' in, remove it.
+        fgets(response, sizeof (response), fresponse);
+        pclose(fresponse);
 
-                // update statistics
-                totalRequestCount++;
-                double requestTime = (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
-                totalResponseTime += requestTime;
+        // update statistics
+        totalRequestCount++;
+        double requestTime = (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
+        totalResponseTime += requestTime;
         if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
 
-            for (int p = strlen(response) - 1; p >= 0; p--) {
-                if (response[p] == '\n') response[p] = 0;
-                else break;
-                }
+        for (int p = strlen(response) - 1; p >= 0; p--) {
+            if (response[p] == '\n') response[p] = 0;
+            else break;
+        }
 
         res = response;
 
         if (res.empty()) {
             // empty, means fails
             totalFailedRequestCount++;
-                    res = requestString;
-        }
-        if (engine->writeRequestCache && requestString != res) {
-
-            engine->luaBinding->setValue(requestString.c_str(), res.c_str(), "requestCache");
+            res = requestString;
+        } else {
+            if (engine->writeRequestCache && requestString != res) {
+                engine->luaBinding->setValue(requestString.c_str(), res.c_str(), "requestCache");
+            }
         }
     }
     return res;
@@ -1076,15 +1099,15 @@ static int l_commitText(lua_State * L) {
     luaL_checkstring(L, 1);
 
 #if(0)
-            // direct commit test
-            IBusText *commitText;
-            commitText = ibus_text_new_from_string(lua_tostring(L, 1));
-            ibus_engine_commit_text((IBusEngine *) (l2Engine[L]), commitText);
-            g_object_unref(commitText);
+    // direct commit test
+    IBusText *commitText;
+    commitText = ibus_text_new_from_string(lua_tostring(L, 1));
+    ibus_engine_commit_text((IBusEngine *) (l2Engine[L]), commitText);
+    g_object_unref(commitText);
 #else
-            IBusSgpyccEngine* engine = l2Engine[L];
-            DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
-            engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    IBusSgpyccEngine* engine = l2Engine[L];
+    DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
+    engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
 #endif
 
     return 0; // return 0 value to lua code
@@ -1096,10 +1119,10 @@ static int l_commitText(lua_State * L) {
  */
 static int l_sendRequest(lua_State * L) {
     luaL_checkstring(L, 1);
-            IBusSgpyccEngine* engine = l2Engine[L];
-            DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
-            engine->requesting = true;
-            engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    IBusSgpyccEngine* engine = l2Engine[L];
+    DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
+    engine->requesting = true;
+    engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
 
     return 0; // return 0 value to lua code
 }
@@ -1109,12 +1132,12 @@ static int l_sendRequest(lua_State * L) {
  */
 static int l_correct(lua_State * L) {
     luaL_checkstring(L, 1);
-            IBusSgpyccEngine* engine = l2Engine[L];
-            DEBUG_PRINT(1, "[ENGINE] l_correct: %s\n", lua_tostring(L, 1));
+    IBusSgpyccEngine* engine = l2Engine[L];
+    DEBUG_PRINT(1, "[ENGINE] l_correct: %s\n", lua_tostring(L, 1));
 
-            *engine->correctingPinyins = string(lua_tostring(L, 1));
-            *engine->preedit = "";
-            *engine->activePreedit = "";
+    *engine->correctingPinyins = string(lua_tostring(L, 1));
+    *engine->preedit = "";
+    *engine->activePreedit = "";
 
     return 0; // return 0 value to lua code
 }
@@ -1125,13 +1148,13 @@ static int l_correct(lua_State * L) {
  */
 static int l_isIdle(lua_State * L) {
     IBusSgpyccEngine* engine = l2Engine[L];
-            DEBUG_PRINT(2, "[ENGINE] l_isIdle\n");
+    DEBUG_PRINT(2, "[ENGINE] l_isIdle\n");
 
-            lua_checkstack(L, 1);
+    lua_checkstack(L, 1);
 
-            engine->cloudClient->readLock();
-            lua_pushboolean(L, engine->cloudClient->getRequestCount() == 0 && engine->luaBinding->getValue("preedit", "").empty());
-            engine->cloudClient->readUnlock();
+    engine->cloudClient->readLock();
+    lua_pushboolean(L, engine->cloudClient->getRequestCount() == 0 && engine->luaBinding->getValue("preedit", "").empty());
+    engine->cloudClient->readUnlock();
 
     return 1;
 }
@@ -1142,9 +1165,9 @@ static int l_isIdle(lua_State * L) {
  */
 static int l_removeLastRequest(lua_State * L) {
     IBusSgpyccEngine* engine = l2Engine[L];
-            DEBUG_PRINT(2, "[ENGINE] l_removeLastRequest\n");
+    DEBUG_PRINT(2, "[ENGINE] l_removeLastRequest\n");
 
-            engine->cloudClient->removeLastRequest();
+    engine->cloudClient->removeLastRequest();
 
     return 0;
 }
@@ -1155,8 +1178,8 @@ static int l_removeLastRequest(lua_State * L) {
  */
 static int l_getSelection(lua_State * L) {
     DEBUG_PRINT(2, "[ENGINE] l_removeLastRequest\n");
-            lua_checkstack(L, 1);
-            string selection = XUtility::getSelection();
-            lua_pushstring(L, selection.c_str());
+    lua_checkstack(L, 1);
+    string selection = XUtility::getSelection();
+    lua_pushstring(L, selection.c_str());
     return 1;
 }
