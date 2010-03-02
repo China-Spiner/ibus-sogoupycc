@@ -336,9 +336,10 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->table = ibus_lookup_table_new(engine->tableLabelKeys->length(), 0, 0, 0);
 
     // ibus_lookup_table_set_orientation() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
-#ifndef IBUS_LEGACY_VERSION
-    ibus_lookup_table_set_orientation(engine->table, engine->luaBinding->getValue("tableOrientation", IBUS_ORIENTATION_VERTICAL));
-#endif
+    // and since ibus-1.2.0.20090927 and ibus-1.2.0.20100111 use same defines, program can not tell
+    // if ibus_lookup_table_set_orientation() is available.
+    // just forget ibus_lookup_table_set_orientation().
+    // ibus_lookup_table_set_orientation(engine->table, engine->luaBinding->getValue("tableOrientation", IBUS_ORIENTATION_VERTICAL));
 
     for (size_t i = 0; i < engine->tableLabelKeys->length(); i++) {
         IBusText* text = ibus_text_new_from_printf("%c", engine->tableLabelKeys->data()[i]);
