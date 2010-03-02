@@ -4,10 +4,10 @@ pcall(function() require 'luarocks.require' end)
 http = require('socket.http')
 url = require('socket.url')
 
-http.TIMEOUT = 4
+http.TIMEOUT = 0.3
 http.USERAGENT =  "ibus-sogoupycc"
 
-local py, retry = arg[1] or 'kong bai', 2
+local py, retry = arg[1] or 'kong bai', 7
 py = py:gsub(" ","'"):gsub("[^a-z']", '')
 
 while retry > 0 do
@@ -17,7 +17,7 @@ while retry > 0 do
 		if res then io.write(res:match('(.-)：')) return end
 	end
 	retry = retry - 1
-	http.TIMEOUT = http.TIMEOUT * 2
+	http.TIMEOUT = http.TIMEOUT * 1.8
 end
 
 -- write smth to keep the pipe open, an ampty line indicates retrieve failure
