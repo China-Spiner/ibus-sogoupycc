@@ -137,7 +137,7 @@ void PinyinCloudClient::request(const string requestString, FetchFunc fetchFunc,
 
 PinyinCloudClient::PinyinCloudClient() {
     DEBUG_PRINT(1, "[CLOUD] Init\n");
-    
+
     nextRequestId = 0;
     pthread_rwlock_init(&requestsLock, NULL);
 }
@@ -160,9 +160,9 @@ const size_t PinyinCloudClient::getRequestCount() const {
 }
 
 const PinyinCloudRequest& PinyinCloudClient::getRequest(size_t index) const {
-
     DEBUG_PRINT(5, "[CLOUD] getRequest # %d\n", index);
-    return requests[index];
+    if (index < requests.size() && index >= 0) return requests[index];
+    else return requests[requests.size() - 1];
 }
 
 void PinyinCloudClient::removeFirstRequest(int count) {

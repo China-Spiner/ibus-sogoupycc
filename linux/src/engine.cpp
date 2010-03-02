@@ -641,7 +641,7 @@ engineProcessKeyEventStart:
                     if (!engine->engMode) {
                         if (keyval == engine->startCorrectionKey) {
                             // switch to editing mode
-                            if (engine->preedit->length() > 0) {
+                            if (!engine->preedit->empty()) {
                                 // edit active preedit
                                 *engine->preedit = "";
                                 *engine->correctingPinyins = *engine->activePreedit;
@@ -672,6 +672,9 @@ engineProcessKeyEventStart:
                                     handled = true;
                                     goto engineProcessKeyEventStart;
                                 }
+                            } else {
+                                // user may want to edit last commited pinyin string due to slow network
+                                // due to lock issues, this is not implemented now
                             }
                         } else if (keyval == IBUS_BackSpace) {
                             // backspace, remove last char from preedit or cancel last request
