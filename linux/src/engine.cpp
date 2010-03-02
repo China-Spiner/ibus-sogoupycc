@@ -486,6 +486,8 @@ engineProcessKeyEventStart:
             engine->correctingPinyins->clear();
             engine->commitedConvertingCharacters->clear();
             engine->commitedConvertingPinyins->clear();
+            keyval = 0;
+            res = TRUE;
             goto engineProcessKeyEventStart;
         } else if (keyval == IBUS_BackSpace) {
             keyval = 0;
