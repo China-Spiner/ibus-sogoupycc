@@ -2,6 +2,8 @@
  * File:   PinyinDatabase.h
  * Author: WU Jun
  *
+ * March 2, 2010
+ *  0.1.2
  * February 28, 2010
  *  0.1.1 major bugs fixed
  *  fix 'ing', 'iang' not regonised issue

@@ -336,7 +336,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->table = ibus_lookup_table_new(engine->tableLabelKeys->length(), 0, 0, 0);
 
     // ibus_lookup_table_set_orientation() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
-#ifdef IBUS_ORIENTATION_VERTICAL
+#ifndef IBUS_LEGACY_VERSION
     ibus_lookup_table_set_orientation(engine->table, engine->luaBinding->getValue("tableOrientation", IBUS_ORIENTATION_VERTICAL));
 #endif
 
@@ -410,7 +410,7 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     IBUS_OBJECT_CLASS(parentClass)->destroy((IBusObject *) engine);
 }
 
-// ibus_lookup_table_get_number_of_candidates() is not availalbe in ibus-1.2.0.20090927, provided by ubuntu 9.10
+// ibus_lookup_table_get_number_of_candidates() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
 // use these inline functions as alternative
 
 inline static void engineAppendLookupTable(IBusSgpyccEngine *engine, IBusText *candidate) {
@@ -542,7 +542,7 @@ engineProcessKeyEventStart:
             }
         }
 
-        // ibus_lookup_table_get_number_of_candidates() is not availalbe in ibus-1.2.0.20090927, provided by ubuntu 9.10
+        // ibus_lookup_table_get_number_of_candidates() is not availble in ibus-1.2.0.20090927, provided by ubuntu 9.10
         // if (ibus_lookup_table_get_number_of_candidates(engine->table) == 0) {
         if (engine->candicateCount == 0) {
             // update and show lookup table
@@ -576,7 +576,7 @@ engineProcessKeyEventStart:
                             const string & candidate = it->second;
                             if (cInserted.find(candidate) == cInserted.end()) {
                                 IBusText* candidateText = ibus_text_new_from_string(it->second.c_str());
-                                ibus_lookup_table_append_candidate(engine->table, candidateText);
+                                engineAppendLookupTable(engine, candidateText);
                                 g_object_unref(candidateText);
                                 cInserted.insert(it->second);
                             }

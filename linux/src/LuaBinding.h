@@ -2,6 +2,8 @@
  * File:   LuaBinding.h
  * Author: WU Jun <quark@lihdd.net>
  *
+ * March 2, 2010
+ *  0.1.2
  * February 28, 2010
  *  0.1.1 major bugs fixed
  *  do not unload dbs in ~LuaBinding

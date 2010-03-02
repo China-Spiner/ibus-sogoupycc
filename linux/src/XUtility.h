@@ -1,7 +1,9 @@
 /*
  * File:   XUtility.cpp
  * Author: WU Jun <quark@lihdd.net>
- * 
+ *
+ * March 2, 2010
+ *  0.1.2
  * February 28, 2010
  *  0.1.1 major bugs fixed
  *  add debug output, use gtk callback update instead of X loop checking
