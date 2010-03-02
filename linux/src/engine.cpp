@@ -45,7 +45,10 @@ struct _IBusSgpyccEngine {
     string* tableLabelKeys;
 
     // colors
-    int requestingBackColor, requestingForeColor, requestedBackColor, requestedForeColor, preeditForeColor, preeditBackColor;
+    int requestingBackColor, requestingForeColor;
+    int requestedBackColor, requestedForeColor;
+    int preeditForeColor, preeditBackColor;
+    int correctingForeColor, correctingBackColor;
 
     // keys
     guint32 engModeToggleKey, startCorrectionKey, pageDownKey, pageUpKey;
@@ -59,7 +62,8 @@ struct _IBusSgpyccEngine {
     string *preedit, *activePreedit;
 
     // convertingPinyins are pinyin string in preedit and should be choiced from left to right manually
-    string* convertingPinyins;
+    string* correctingPinyins;
+    string* commitedConvertingPinyins, *commitedConvertingCharacters;
 
     // eng mode, requesting (used to update requestingProp)
     bool engMode, requesting;
@@ -291,7 +295,6 @@ static void engineInit(IBusSgpyccEngine *engine) {
 
     // read in external script path
     engine->fetcherPath = new string(engine->luaBinding->getValue("fetcher", PKGDATADIR "/fetcher"));
-    engine->convertingPinyins = new string("");
     engine->fetcherBufferSize = engine->luaBinding->getValue("fetcherBufferSize", 1024);
 
     // init pinyin cloud client
@@ -310,8 +313,11 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->requesting = false;
 
     // std::strings
-    engine->preedit = new string("");
-    engine->activePreedit = new string("");
+    engine->preedit = new string();
+    engine->activePreedit = new string();
+    engine->commitedConvertingCharacters = new string();
+    engine->commitedConvertingPinyins = new string();
+    engine->correctingPinyins = new string();
 
     // internal vars
     engine->lastProcessKeyResult = FALSE;
@@ -348,6 +354,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->requestingBackColor = engine->luaBinding->getValue("requestingBackColor", 0xB8CFE5);
     engine->requestedForeColor = engine->luaBinding->getValue("requestedForeColor", 0x00C97F);
     engine->requestedBackColor = engine->luaBinding->getValue("requestedBackColor", INVALID_COLOR);
+    engine->correctingForeColor = engine->luaBinding->getValue("correctingForeColor", INVALID_COLOR);
+    engine->correctingBackColor = engine->luaBinding->getValue("correctingBackColor", 0xEDBE7D);
 
     // selection timeout set, user passed here is second
     engine->selectionMaxTimout = (long long) engine->luaBinding->getValue("selectionTimeout", 5.0) * XUtility::MICROSECOND_PER_SECOND;
@@ -367,15 +375,19 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     DEBUG_PRINT(1, "[ENGINE] Destroy\n");
     l2Engine.erase(engine->luaBinding->getLuaState());
     pthread_mutex_destroy(&engine->engineMutex);
+
     // delete strings
     delete engine->luaBinding;
     delete engine->cloudClient;
     delete engine->fetcherPath;
-    delete engine->convertingPinyins;
+    delete engine->correctingPinyins;
     delete engine->tableLabelKeys;
     delete engine->preedit;
     delete engine->activePreedit;
     delete engine->dbOrder;
+    delete engine->commitedConvertingCharacters;
+    delete engine->commitedConvertingPinyins;
+
     // unref g objects
 #define DELETE_G_OBJECT(x) if(x != NULL) g_object_unref(x), x = NULL;
     DELETE_G_OBJECT(engine->table);
@@ -394,9 +406,9 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
 
 engineProcessKeyEventStart:
     // commit all non-pinyin part of convertingPinyins
-    while (engine->convertingPinyins->length() > 0) {
+    while (engine->correctingPinyins->length() > 0) {
         // try parse that pinyin at left of convertingPinyins
-        string s = *(engine->convertingPinyins) + " ";
+        string s = *(engine->correctingPinyins) + " ";
 
         int spacePosition = s.find(' ');
         string pinyin = s.substr(0, spacePosition);
@@ -415,13 +427,13 @@ engineProcessKeyEventStart:
             // not found, submit 'pinyin' (it is indeed not a valid pinyin)
             if (pinyin.empty()) pinyin += " ";
             engine->cloudClient->request(pinyin, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-            engine->convertingPinyins->erase(0, spacePosition + 1);
+            engine->correctingPinyins->erase(0, spacePosition + 1);
         }
     }
 
-    if (engine->convertingPinyins->length() > 0) {
+    if (engine->correctingPinyins->length() > 0) {
         // cut off pinyins, get leftmost pinyin
-        string s = *(engine->convertingPinyins) + " ";
+        string s = *(engine->correctingPinyins) + " ";
         int spacePosition = s.find(' ');
 
         // try parse that pinyin (should parse successfully)
@@ -437,7 +449,7 @@ engineProcessKeyEventStart:
             enginePageUp(engine);
             res = TRUE;
         } else if (keyval == IBUS_Delete) {
-            engine->convertingPinyins->erase(0, (*(engine->convertingPinyins) + " ").find(' ') + 1);
+            engine->correctingPinyins->erase(0, (*(engine->correctingPinyins) + " ").find(' ') + 1);
             keyval = 0;
             res = TRUE;
             ibus_lookup_table_clear(engine->table);
@@ -479,12 +491,16 @@ engineProcessKeyEventStart:
                     engine->tablePageNumber = 0;
                     res = TRUE;
                 } else {
-                    // normal character or phrase, commit it
+                    // user select a phrase, commit it
                     int length = g_utf8_strlen(candidate->text, -1);
                     // use cloud client commit, do not direct commit !
                     engine->cloudClient->request(candidate->text, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                     // remove pinyin section from commitingPinyins
-                    for (int i = 0; i < length; ++i) engine->convertingPinyins->erase(0, (*(engine->convertingPinyins) + " ").find(' ') + 1);
+                    for (int i = 0; i < length; ++i) {
+                        *engine->commitedConvertingPinyins += engine->correctingPinyins->substr(0, (*(engine->correctingPinyins) + " ").find(' ') + 1);
+                        engine->correctingPinyins->erase(0, (*(engine->correctingPinyins) + " ").find(' ') + 1);
+                    }
+                    *engine->commitedConvertingCharacters += candidate->text;
                     // rescan, rebuild lookup table
                     ibus_lookup_table_clear(engine->table);
                     keyval = 0;
@@ -518,7 +534,7 @@ engineProcessKeyEventStart:
                         CandidateList cl;
                         set<string> cInserted;
                         for (map<string, PinyinDatabase*>::iterator it = LuaBinding::pinyinDatabases.begin(); it != LuaBinding::pinyinDatabases.end(); ++it) {
-                            it->second->query(*(engine->convertingPinyins), cl, engine->dbResultLimit, engine->dbLongPhraseAdjust);
+                            it->second->query(*(engine->correctingPinyins), cl, engine->dbResultLimit, engine->dbLongPhraseAdjust);
                         }
                         for (CandidateList::iterator it = cl.begin(); it != cl.end(); ++it) {
                             const string & candidate = it->second;
@@ -553,6 +569,18 @@ engineProcessKeyEventStart:
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
 
     } else { // (engine->convertingPinyins->length() == 0)
+        // check *engine->commitedConverting
+        if (!engine->commitedConvertingCharacters->empty()) {
+            // rtrim, assuming string::npos + 1 == 0
+            engine->commitedConvertingCharacters->erase(engine->commitedConvertingCharacters->find_last_not_of(" \n\r\t") + 1);
+            if (!engine->commitedConvertingCharacters->empty() && engine->writeRequestCache) {
+                engine->luaBinding->setValue(engine->commitedConvertingPinyins->c_str(), engine->commitedConvertingCharacters->c_str(), "requestCache");
+            }
+            engine->commitedConvertingCharacters->clear();
+            engine->commitedConvertingPinyins->clear();
+        }
+
+        // hide lookup table
         ibus_engine_hide_lookup_table((IBusEngine*) engine);
         ibus_engine_hide_auxiliary_text((IBusEngine*) engine);
 
@@ -610,7 +638,7 @@ engineProcessKeyEventStart:
                             if (engine->preedit->length() > 0) {
                                 // edit active preedit
                                 *engine->preedit = "";
-                                *(engine->convertingPinyins) = *engine->activePreedit;
+                                *engine->correctingPinyins = *engine->activePreedit;
                                 *engine->activePreedit = "";
                                 // clear candidates, prepare for new candidates
                                 ibus_lookup_table_clear(engine->table);
@@ -633,7 +661,7 @@ engineProcessKeyEventStart:
                                     IBusText *emptyText = ibus_text_new_from_static_string("");
                                     // delete selection
                                     ibus_engine_commit_text((IBusEngine*) engine, emptyText);
-                                    *engine->convertingPinyins = PinyinUtility::charactersToPinyins(selection);
+                                    *engine->correctingPinyins = PinyinUtility::charactersToPinyins(selection);
                                     keyval = 0;
                                     handled = true;
                                     goto engineProcessKeyEventStart;
@@ -807,7 +835,7 @@ static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
 
 static void enginePageUp(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] PageUp\n");
-    if (engine->convertingPinyins->length() > 0) {
+    if (engine->correctingPinyins->length() > 0) {
         if (ibus_lookup_table_page_up(engine->table)) engine->tablePageNumber--;
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -815,7 +843,7 @@ static void enginePageUp(IBusSgpyccEngine * engine) {
 
 static void enginePageDown(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] PageDown\n");
-    if (engine->convertingPinyins->length() > 0) {
+    if (engine->correctingPinyins->length() > 0) {
         if (ibus_lookup_table_page_down(engine->table)) engine->tablePageNumber++;
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -823,7 +851,7 @@ static void enginePageDown(IBusSgpyccEngine * engine) {
 
 static void engineCursorUp(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] CursorUp\n");
-    if (engine->convertingPinyins->length() > 0) {
+    if (engine->correctingPinyins->length() > 0) {
         ibus_lookup_table_cursor_up(engine->table);
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -831,7 +859,7 @@ static void engineCursorUp(IBusSgpyccEngine * engine) {
 
 static void engineCursorDown(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] CursorDown\n");
-    if (engine->convertingPinyins->length() > 0) {
+    if (engine->correctingPinyins->length() > 0) {
         ibus_lookup_table_cursor_down(engine->table);
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -881,9 +909,9 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     // append current preedit (not belong to a request, still editable, active)
 
     string activePreedit = *engine->activePreedit;
-    if (engine->convertingPinyins->length() > 0) {
+    if (engine->correctingPinyins->length() > 0) {
         // only show convertingPinyins as activePreedit
-        activePreedit = *engine->convertingPinyins;
+        activePreedit = *engine->correctingPinyins;
     }
     preedit += activePreedit;
     DEBUG_PRINT(4, "[ENGINE.UpdatePreedit] preedit: %s\n", preedit.c_str());
@@ -921,10 +949,10 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
 
     // colors, underline of (rightmost) active preedit
     // preeditLen now hasn't count rightmost active preedit
-    if (engine->convertingPinyins->length() > 0) {
+    if (engine->correctingPinyins->length() > 0) {
         // for convertingPinyins, use requesting color instead
-        if (engine->requestingBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(engine->requestingBackColor, preeditLen, ibus_text_get_length(preeditText)));
-        if (engine->requestingForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->requestingForeColor, preeditLen, ibus_text_get_length(preeditText)));
+        if (engine->correctingBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(engine->correctingBackColor, preeditLen, ibus_text_get_length(preeditText)));
+        if (engine->correctingForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->correctingForeColor, preeditLen, ibus_text_get_length(preeditText)));
     } else {
         if (engine->preeditBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(engine->preeditBackColor, preeditLen, ibus_text_get_length(preeditText)));
         if (engine->preeditForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(engine->preeditForeColor, preeditLen, ibus_text_get_length(preeditText)));
@@ -932,7 +960,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     ibus_attr_list_append(preeditText->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, preeditLen, ibus_text_get_length(preeditText)));
 
     // finally, update preedit
-    if (engine->convertingPinyins->length() > 0) {
+    if (engine->correctingPinyins->length() > 0) {
         // cursor at left of active preedit
         ibus_engine_update_preedit_text((IBusEngine *) engine, preeditText, preeditLen, TRUE);
     } else {
@@ -1054,7 +1082,7 @@ static int l_correct(lua_State * L) {
     IBusSgpyccEngine* engine = l2Engine[L];
     DEBUG_PRINT(1, "[ENGINE] l_correct: %s\n", lua_tostring(L, 1));
 
-    *engine->convertingPinyins = string(lua_tostring(L, 1));
+    *engine->correctingPinyins = string(lua_tostring(L, 1));
     *engine->preedit = "";
     *engine->activePreedit = "";
 

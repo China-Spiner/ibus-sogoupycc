@@ -150,13 +150,14 @@ requestCache = {
 
 -- 颜色设定
 -- preedit 用于未提交拼音提示部分
--- requesting 为正在请求部分，也用于纠正模式中
+-- requesting 为正在请求部分
 -- requested 为已获得结果但由于前面还有正在请求内容而暂不能上屏的部分
+-- correcting 用于纠正模式中
 -- 默认：如下
 -- pycc.preeditForeColor, pycc.preeditBackColor = 0x0050FF, pycc.COLOR_NOCHANGE
 -- pycc.requestingForeColor, pycc.requestingBackColor = pycc.COLOR_NOCHANGE, 0xB8CFE5
 -- pycc.requestedForeColor, pycc.requestedBackColor = 0x00C97F, pycc.COLOR_NOCHANGE
-
+-- pycc.correctingForeColor, pycc.correctingBackColor = pycc.COLOR_NOCHANGE, 0xEDBE7D
 
 -- 纠正模式 --------------------------------------------------------------------
 
