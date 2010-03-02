@@ -454,6 +454,12 @@ engineProcessKeyEventStart:
             res = TRUE;
             ibus_lookup_table_clear(engine->table);
             goto engineProcessKeyEventStart;
+        } else if (keyval == IBUS_Escape) {
+            // cancel correcting
+            engine->correctingPinyins->clear();
+            engine->commitedConvertingCharacters->clear();
+            engine->commitedConvertingPinyins->clear();
+            goto engineProcessKeyEventStart;
         } else if (keyval == IBUS_BackSpace) {
             keyval = 0;
             res = TRUE;
