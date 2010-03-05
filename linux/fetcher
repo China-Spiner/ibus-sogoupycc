@@ -1,5 +1,5 @@
 #!/usr/bin/lua
-
+if not pcall(function()
 pcall(function() require 'luarocks.require' end)
 http = require('socket.http')
 url = require('socket.url')
@@ -14,7 +14,13 @@ while retry > 0 do
 	local ret = http.request('http://web.pinyin.sogou.com/web_ime/get_ajax/'..py..'.key')
 	if ret and ret:match('ime_query_res="([^"]*)"') then
 		local res = url.unescape(ret:match('ime_query_res="([^"]*)"'))
-		if res then io.write(res:match('(.-)：')) return end
+		if res then
+			if res:match('(.-)：') then
+				io.write(res:match('(.-)：')) return
+			else
+				io.write('\n') return
+			end
+		end
 	end
 	retry = retry - 1
 	http.TIMEOUT = http.TIMEOUT * 1.8
@@ -23,4 +29,4 @@ end
 -- write smth to keep the pipe open, an ampty line indicates retrieve failure
 io.write('\n')
 
--- if retry > 1 then socket.sleep(math.random(10)) end
+end) then io.write('\n') end
