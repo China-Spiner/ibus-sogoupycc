@@ -2,6 +2,8 @@
  * File:   defines.h
  * Author: WU Jun <quark@lihdd.net>
  *
+ * March 9, 2010
+ *  0.1.3
  * March 2, 2010
  *  0.1.2
  * February 28, 2010
@@ -27,7 +29,7 @@ extern "C" {
 #endif
 
 #ifndef VERSION
-#define VERSION "0.1.2"
+#define VERSION "0.1.3"
 #endif
 
 // for debugging

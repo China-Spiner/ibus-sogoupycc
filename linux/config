@@ -15,7 +15,7 @@ if not useUserConfig then local userConfig = os.getenv('HOME')..'/.ibus/sgpycc/c
 
 --[[----------------------------------------------------------------------------
 全局设置
-此类设置对所有客户端 (窗口)生效，只需运行一次
+此类设置对所有客户端 (窗口) 生效，在程序启动时被运行一次（只需运行一次）
 --]]----------------------------------------------------------------------------
 
 if pycc.firstRun then
@@ -43,6 +43,25 @@ dbs:close()
 -- 显示调试信息级别 (0 - 6)
 -- 默认：0，不显示任何调试信息
 -- pycc.setDebugLevel(4)
+
+-- 自动更新用户 fetcher 脚本，如果你不愿意这样做，请将 true 改为 false
+if true then
+	os.execute("mkdir '"..os.getenv('HOME')..'/.ibus/sgpycc/'.."' -p")
+	pcall(function() require 'luarocks.require' end)
+	local http = require('socket.http')
+	local url = require('socket.url')
+	local ret, c = http.request('http://ibus-sogoupycc.googlecode.com/svn/trunk/linux/fetcher')
+	if c == 200 and ret and #ret > 100 then
+		-- update to ~/.ibus/sgpycc/fetcher
+		local fetcherFile = io.open(os.getenv('HOME')..'/.ibus/sgpycc/fetcher','w')
+		fetcherFile:write(ret)
+		fetcherFile:close()
+		-- make it executable
+		os.execute("chmod +x '"..os.getenv('HOME')..'/.ibus/sgpycc/fetcher'.."'")
+		print('User fetcher script updated')
+	end
+end
+
 end
 
 
@@ -52,6 +71,8 @@ end
 此类设置在不同的客户端内可以不同，每次都要运行
 譬如，若将颜色部分设为随机，则在不同客户端程序 (不同窗口) 中将有不同的颜色
 --]]----------------------------------------------------------------------------
+
+if pycc.sessionInit then
 
 -- 模式 ------------------------------------------------------------------------
 
@@ -78,6 +99,10 @@ end
 -- 外部字词库结果限制，0 为无限制
 -- 默认：64，每个字词库每个长度的结果最多 64 个
 -- pycc.dbLimit = 0
+
+-- 外部词库返回结果长度限制，应该在 1 到 15 之间
+-- 默认：6，修改此项有助于加快查询速度
+-- pycc.dbLength = 6
 
 -- 外部字词库长词组位置调整，0 为没有调整，负数向后调整，正数向前调整
 -- 默认：1.0，将长词组位置稍微提前
@@ -137,14 +162,16 @@ requestCache = {
 -- 请求脚本位置
 -- 默认：pycc.PKGDATADIR .. "/fetcher"
 -- 注：该脚本接受一个可能用空格做分割的拼音字符串为参数，将请求结果写到
--- 标准输出第一行中，该脚本需处理超时情况，若出现错误，该脚本可以将接受
--- 的参数原封不动输出，或者输出一空行
--- pycc.fetcher = pycc.PKGDATADIR .. "/fetcher"
+-- 标准输出第一行中，该脚本需处理超时情况，若出现错误，应该输出一空行
+-- 目前设置为，如果有用户 fetcher 脚本存在，则使用用户脚本
+-- 自动更新机制将维护用户 fetcher 脚本
+local userFetcher = os.getenv('HOME')..'/.ibus/sgpycc/fetcher'
+local file = io.open(userFetcher, 'r')
+if file then file:close() pycc.fetcher = userFetcher end
 
 -- 请求脚本返回文字的最大大小 (字节，包括末尾 '\0' )
 -- 默认：1024
 -- pycc.fetcherBufferSize = 1024
-
 
 -- 界面 ------------------------------------------------------------------------
 
@@ -171,6 +198,8 @@ requestCache = {
 -- 超时，当选择一段新的文字之后，如果超过这个时间，则再按纠正热键也不会起作用
 -- 默认： 5.0， 5 秒钟后超时
 -- pycc.selectionTimeout = 5.0
+
+end
 
 
 -- Note ------------------------------------------------------------------------

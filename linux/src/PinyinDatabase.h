@@ -2,6 +2,8 @@
  * File:   PinyinDatabase.h
  * Author: WU Jun
  *
+ * March 9, 2010
+ *  0.1.3 limit query length
  * March 2, 2010
  *  0.1.2
  * February 28, 2010
@@ -21,6 +23,8 @@
 #include <string>
 #include <map>
 
+#define PINYIN_DB_ID_MAX 15
+
 using std::string;
 using std::multimap;
 using std::greater;
@@ -39,7 +43,7 @@ public:
      * @param limitCount limit result count (per length), 0 if no limit
      * @param longPhraseAdjust 0 if no adjust, positive move long phrase front, negative move short phrase front
      */
-    void query(const string pinyins, CandidateList& candidateList, const int limitCount = 0, const double longPhraseAdjust = 0);
+    void query(const string pinyins, CandidateList& candidateList, const int limitCount = 0, const double longPhraseAdjust = 0, const int limitLength = PINYIN_DB_ID_MAX);
     const bool isDatabaseOpened() const;
 
     virtual ~PinyinDatabase();
@@ -125,7 +129,5 @@ namespace PinyinDefines {
     const int PINYIN_ID_V = 56;
     const int PINYIN_ID_NG = PINYIN_ID_VOID;
 }
-
-#define PINYIN_DB_ID_MAX 15
 
 #endif	/* _PINYINDATABASE_H */

@@ -103,6 +103,10 @@ int main(int argc, char *argv[]) {
         init(1);
     }
 
+    // load static data
+    LuaBinding::staticInit();
+
+
     ibus_main();
 
     DEBUG_PRINT(1, "[MAIN] Exiting from ibus_main() ...\n");

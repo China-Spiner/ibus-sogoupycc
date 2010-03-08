@@ -90,7 +90,7 @@ struct _IBusSgpyccEngine {
     long long selectionMaxTimout;
 
     // database confs
-    int dbResultLimit;
+    int dbResultLimit, dbLengthLimit;
     string* dbOrder;
     double dbLongPhraseAdjust;
 #define INVALID_COLOR -1
@@ -101,7 +101,6 @@ struct _IBusSgpyccEngineClass {
 };
 
 static IBusEngineClass *parentClass = NULL;
-static bool engineFirstRun = true;
 
 // statistics (static vars, otherwise data may not enough)
 static int totalRequestCount = 0;
@@ -280,9 +279,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
             end");
 #undef LIB_NAME
     engine->luaBinding->setValue("COLOR_NOCHANGE", INVALID_COLOR);
-    engine->luaBinding->setValue("PKGDATADIR", PKGDATADIR);
-    engine->luaBinding->setValue("firstRun", engineFirstRun);
-    engineFirstRun = false;
+    engine->luaBinding->setValue("sessionInit", true);
+    engine->luaBinding->setValue("firstRun", false);
 
     // register functions
     engine->luaBinding->addFunction(l_commitText, "commit");
@@ -351,6 +349,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
 
     // database confs
     engine->dbResultLimit = engine->luaBinding->getValue("dbLimit", 64);
+    engine->dbLengthLimit = engine->luaBinding->getValue("dbLength", 6);
     engine->dbLongPhraseAdjust = engine->luaBinding->getValue("dbPhraseAdjust", 1.0);
     engine->dbOrder = new string(engine->luaBinding->getValue("dbOrder", ""));
 
@@ -573,7 +572,7 @@ engineProcessKeyEventStart:
                         CandidateList cl;
                         set<string> cInserted;
                         for (map<string, PinyinDatabase*>::iterator it = LuaBinding::pinyinDatabases.begin(); it != LuaBinding::pinyinDatabases.end(); ++it) {
-                            it->second->query(*(engine->correctingPinyins), cl, engine->dbResultLimit, engine->dbLongPhraseAdjust);
+                            it->second->query(*(engine->correctingPinyins), cl, engine->dbResultLimit, engine->dbLongPhraseAdjust, engine->dbLengthLimit);
                         }
                         for (CandidateList::iterator it = cl.begin(); it != cl.end(); ++it) {
                             const string & candidate = it->second;

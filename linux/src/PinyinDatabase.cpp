@@ -35,7 +35,7 @@ const bool PinyinDatabase::isDatabaseOpened() const {
     return (db != NULL);
 }
 
-void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, const int limitCount, const double longPhraseAdjust) {
+void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, const int countLimit, const double longPhraseAdjust, const int lengthLimit) {
     DEBUG_PRINT(3, "[PYDB] query: %s\n", pinyins.c_str());
 
     if (!db) return;
@@ -43,12 +43,16 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
     string s = pinyins + " ";
     string queryWhere;
     char idString[12], whereBuffer[128], limitBuffer[32];
+    int lengthMax = lengthLimit;
+
+    if (lengthMax < 0) lengthMax = 1;
+    if (lengthMax > PINYIN_DB_ID_MAX) lengthMax = PINYIN_DB_ID_MAX;
 
     for (size_t pos = s.find(' '), lastPos = -1, id = 0; pos != string::npos; id++, lastPos = pos, pos = s.find(' ', pos + 1)) {
         // "chuang qian ming yue guang"
         //        ^    ^
         //  lastPos  pos
-        if (id > PINYIN_DB_ID_MAX) break;
+        if (id > lengthMax) break;
         string pinyin = s.substr(lastPos + 1, pos - lastPos - 1);
 
         snprintf(idString, sizeof (idString), "%d", id);
@@ -62,8 +66,8 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
         if (cid == PinyinDefines::PINYIN_ID_VOID) break;
 
         // build query and quey
-        if (limitCount > 0) {
-            snprintf(limitBuffer, sizeof (limitBuffer), " LIMIT %d", limitCount);
+        if (countLimit > 0) {
+            snprintf(limitBuffer, sizeof (limitBuffer), " LIMIT %d", countLimit);
         } else {
             limitBuffer[0] = '\0';
         }

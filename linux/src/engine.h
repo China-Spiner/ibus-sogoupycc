@@ -2,6 +2,8 @@
  * File:   engine.h
  * Author: WU Jun <quark@lihdd.net>
  *
+ * March 9, 2010
+ *  0.1.3 separate lua global / session init
  * March 2, 2010
  *  0.1.2
  * February 28, 2010

@@ -2,6 +2,8 @@
  * File:   LuaBinding.h
  * Author: WU Jun <quark@lihdd.net>
  *
+ * March 9, 2010
+ *  0.1.3 global static init run first
  * March 2, 2010
  *  0.1.2
  * February 28, 2010
@@ -55,9 +57,15 @@ public:
 
     static DoublePinyinScheme doublePinyinScheme;
     static map<string, PinyinDatabase*> pinyinDatabases;
+
+    /**
+     * load global config
+     */
+    static void staticInit();
+
     /**
      * clean up static vars.
-     * now it is to close dbs.
+     * close dbs.
      */
     static void staticDestruct();
 private:

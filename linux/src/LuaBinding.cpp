@@ -215,6 +215,7 @@ map<string, PinyinDatabase*> LuaBinding::pinyinDatabases;
 
 LuaBinding::LuaBinding() {
     DEBUG_PRINT(1, "[LUABIND] Init\n");
+
     // init mutex
     pthread_mutexattr_t luaStateMutexAttribute;
     pthread_mutexattr_init(&luaStateMutexAttribute);
@@ -224,19 +225,32 @@ LuaBinding::LuaBinding() {
         exit(EXIT_FAILURE);
     }
     pthread_mutexattr_destroy(&luaStateMutexAttribute);
+    
     // init lua state
     L = lua_open();
     luaL_openlibs(L);
+
     // add custom library functions. after this, stack has 1 element.
     luaL_register(L, LIB_NAME, pycclib);
     lua_pop(L, 1);
+
     // set static information
     setValue("VERSION", VERSION);
+    setValue("PKGDATADIR", PKGDATADIR);
+
     // insert into static map, let lib function be able to lookup this class
     // L - this one-to-one relation. (Now it takes O(logN) to lookup 'this'
     // from L. Any way to make it more smooth?)
     luaStates[L] = this;
 
+}
+
+void LuaBinding::staticInit() {
+    // load config, modify static vars:
+    // doublePinyinScheme, pinyinDatabases, etc
+    LuaBinding lb;
+    lb.setValue("firstRun", true);
+    lb.doString("dofile('" PKGDATADIR "/config')");
 }
 
 void LuaBinding::staticDestruct() {
