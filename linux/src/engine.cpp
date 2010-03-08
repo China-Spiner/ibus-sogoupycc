@@ -877,9 +877,11 @@ static void engineSetCursorLocation(IBusSgpyccEngine *engine, gint x, gint y, gi
 }
 
 static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
-
     DEBUG_PRINT(2, "[ENGINE] SetCapabilities(%u)\n", caps);
     engine->clientCapabilities = caps;
+    if (engine->clientCapabilities & IBUS_CAP_SURROUNDING_TEXT) {
+        DEBUG_PRINT(3, "[ENGINE] SetCapabilities: IBUS_CAP_SURROUNDING_TEXT\n");
+    }
 }
 
 static void enginePageUp(IBusSgpyccEngine * engine) {
