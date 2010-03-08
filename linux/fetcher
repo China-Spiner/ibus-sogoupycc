@@ -1,19 +1,34 @@
 #!/usr/bin/lua
 if not pcall(function()
+
 pcall(function() require 'luarocks.require' end)
 http = require('socket.http')
 url = require('socket.url')
 
 http.TIMEOUT = 0.3
-http.USERAGENT =  "ibus-sogoupycc"
+http.USERAGENT = "ibus-sogoupycc"
+keyFile = '/tmp/.sogoucloud-key'
 
-local py, retry = arg[1] or 'kong bai', 7
-py = py:gsub(" ","'"):gsub("[^a-z']", '')
+
+local py, retry, key = arg[1] or 'kong bai', 7
+py = py:gsub(" ","+"):gsub("[^a-z']", '')
+
+function refreshKey()
+	local file = io.open(keyFile, 'w')
+	local ret = http.request('http://web.pinyin.sogou.com/web_ime/patch.php')
+	key = ret:match('"(.-)"') or ''
+	file:write(key)
+	file:close()
+end
+
+local file = io.open(keyFile, 'r')
+if file then key = file:read("*line") or '' file:close() else refreshKey() end
 
 while retry > 0 do
-	local ret = http.request('http://web.pinyin.sogou.com/web_ime/get_ajax/'..py..'.key')
-	if ret and ret:match('ime_query_res="([^"]*)"') then
-		local res = url.unescape(ret:match('ime_query_res="([^"]*)"'))
+	local ret = http.request('http://web.pinyin.sogou.com/api/py?key='..key..'&query='..py)
+	local res = ret and ret:match('ime_callback%("(.-)"')
+	if res then
+		res = url.unescape(ret:match('ime_callback%("(.-)"'))
 		if res then
 			if res:match('(.-)：') then
 				io.write(res:match('(.-)：')) return
@@ -28,5 +43,8 @@ end
 
 -- write smth to keep the pipe open, an ampty line indicates retrieve failure
 io.write('\n')
+
+-- mark key as invalid (delete it)
+os.remove(keyFile)
 
 end) then io.write('\n') end
