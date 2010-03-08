@@ -334,10 +334,12 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->table = ibus_lookup_table_new(engine->tableLabelKeys->length(), 0, 0, 0);
 
     // ibus_lookup_table_set_orientation() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
-    // and since ibus-1.2.0.20090927 and ibus-1.2.0.20100111 use same defines, program can not tell
+    // and since ibus-1.2.0.20090927 and ibus-1.2.0.20100111 use same version defines, program can not tell
     // if ibus_lookup_table_set_orientation() is available.
-    // just forget ibus_lookup_table_set_orientation().
-    // ibus_lookup_table_set_orientation(engine->table, engine->luaBinding->getValue("tableOrientation", IBUS_ORIENTATION_VERTICAL));
+    // updated: use IBUS_CAP_SURROUNDING_TEXT marco to tell -,-
+#ifdef IBUS_CAP_SURROUNDING_TEXT
+    ibus_lookup_table_set_orientation(engine->table, engine->luaBinding->getValue("tableOrientation", IBUS_ORIENTATION_VERTICAL));
+#endif
 
     for (size_t i = 0; i < engine->tableLabelKeys->length(); i++) {
         IBusText* text = ibus_text_new_from_printf("%c", engine->tableLabelKeys->data()[i]);
@@ -879,9 +881,11 @@ static void engineSetCursorLocation(IBusSgpyccEngine *engine, gint x, gint y, gi
 static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
     DEBUG_PRINT(2, "[ENGINE] SetCapabilities(%u)\n", caps);
     engine->clientCapabilities = caps;
+#ifdef IBUS_CAP_SURROUNDING_TEXT
     if (engine->clientCapabilities & IBUS_CAP_SURROUNDING_TEXT) {
         DEBUG_PRINT(3, "[ENGINE] SetCapabilities: IBUS_CAP_SURROUNDING_TEXT\n");
     }
+#endif
 }
 
 static void enginePageUp(IBusSgpyccEngine * engine) {
