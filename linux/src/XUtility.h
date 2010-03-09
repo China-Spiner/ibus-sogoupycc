@@ -2,6 +2,8 @@
  * File:   XUtility.cpp
  * Author: WU Jun <quark@lihdd.net>
  *
+ * March 9, 2010
+ *  0.1.3+ add setSelectionUpdatedTime()
  * February 28, 2010
  *  0.1.1 major bugs fixed
  *  add debug output, use gtk callback update instead of X loop checking
@@ -37,6 +39,7 @@ public:
     static const string getSelection();
 
     static const long long getSelectionUpdatedTime();
+    static void setSelectionUpdatedTime(long long time = 0);
     static const long long getCurrentTime();
 
     static long long MICROSECOND_PER_SECOND;

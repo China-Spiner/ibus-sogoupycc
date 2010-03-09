@@ -52,7 +52,7 @@ struct _IBusSgpyccEngine {
     int correctingForeColor, correctingBackColor;
 
     // keys
-    guint32 engModeToggleKey, startCorrectionKey, pageDownKey, pageUpKey;
+    guint32 engModeToggleKey, startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey;
 
     // boolean configs
     bool useDoublePinyin;
@@ -256,7 +256,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
     add_key_const(Escape);
     add_key_const(Delete);
 #undef add_key_const
-
+    engine->luaBinding->setValue("None", IBUS_VoidSymbol, "key");
+    
     // set values
     engine->luaBinding->setValue("preedit", "");
     engine->luaBinding->doString(
@@ -305,6 +306,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
 
     // keys
     engine->engModeToggleKey = engine->luaBinding->getValue("engModeToggleKey", IBUS_Shift_L);
+    engine->engModeKey = engine->luaBinding->getValue("engModeKey", 0);
+    engine->chsModeKey = engine->luaBinding->getValue("chsModeKey", 0);
     engine->startCorrectionKey = engine->luaBinding->getValue("correctionKey", IBUS_Tab);
     engine->pageDownKey = engine->luaBinding->getValue("pageDownKey", (int) 'h');
     engine->pageUpKey = engine->luaBinding->getValue("pageUpKey", (int) 'g');
@@ -487,6 +490,7 @@ engineProcessKeyEventStart:
             engine->correctingPinyins->clear();
             engine->commitedConvertingCharacters->clear();
             engine->commitedConvertingPinyins->clear();
+            XUtility::setSelectionUpdatedTime();
             keyval = 0;
             res = TRUE;
             goto engineProcessKeyEventStart;
@@ -609,6 +613,7 @@ engineProcessKeyEventStart:
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
 
     } else { // (engine->convertingPinyins->length() == 0)
+
         // check *engine->commitedConverting
         if (!engine->commitedConvertingCharacters->empty()) {
             // rtrim, assuming string::npos + 1 == 0
@@ -616,6 +621,7 @@ engineProcessKeyEventStart:
             if (!engine->commitedConvertingCharacters->empty() && engine->writeRequestCache) {
                 engine->luaBinding->setValue(engine->commitedConvertingPinyins->c_str(), engine->commitedConvertingCharacters->c_str(), "requestCache");
             }
+            XUtility::setSelectionUpdatedTime();
             engine->commitedConvertingCharacters->clear();
             engine->commitedConvertingPinyins->clear();
         }
@@ -645,8 +651,12 @@ engineProcessKeyEventStart:
 
                     // normally do not handle release event, but watch for eng mode toggling
                     if ((state & IBUS_RELEASE_MASK) == IBUS_RELEASE_MASK && engine->lastKeyval == keyval) {
-                        if (keyval == engine->engModeToggleKey) {
+                        bool engModeChanged = false;
+                        if ((keyval == engine->engModeToggleKey) || (engine->engMode && keyval == engine->chsModeKey) || (!engine->engMode && keyval == engine->engModeKey)) {
                             engine->engMode = !engine->engMode;
+                            engModeChanged = true;
+                        }
+                        if (engModeChanged) {
                             if (engine->engMode) {
                                 *engine->preedit = "";
                                 *engine->activePreedit = "";
@@ -670,6 +680,7 @@ engineProcessKeyEventStart:
                     char keychr = (keyval < 128) ? keyval : 0;
                     string keychrs = "";
                     if (keychr) keychrs += keychr;
+
                     // since IBUS_Return != '\n', IBUS_Tab != '\t', handle this.
                     if (keyval == IBUS_Return) {
                         keychrs = "\n";

@@ -93,6 +93,14 @@ const long long XUtility::getSelectionUpdatedTime() {
     return r;
 }
 
+void XUtility::setSelectionUpdatedTime(long long time) {
+    staticInit();
+    DEBUG_PRINT(4, "[XUTIL] setSelectionUpdatedTime \n");
+    pthread_rwlock_rdlock(&selectionRwLock);
+    updatedTime = time;
+    pthread_rwlock_unlock(&selectionRwLock);
+}
+
 const string XUtility::getSelection() {
     staticInit();
     DEBUG_PRINT(4, "[XUTIL] getSelection \n");

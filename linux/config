@@ -50,7 +50,7 @@ if true then
 	pcall(function() require 'luarocks.require' end)
 	local http = require('socket.http')
 	local url = require('socket.url')
-	http.TIMEOUT = 1
+	http.TIMEOUT = 0.5
 	local ret, c = http.request('http://ibus-sogoupycc.googlecode.com/svn/trunk/linux/fetcher')
 	if c == 200 and ret and #ret > 100 then
 		-- update to ~/.ibus/sgpycc/fetcher
@@ -114,7 +114,15 @@ if pycc.sessionInit then
 
 -- 切换中英文模式按键
 -- 默认：左 Shift
--- pycc.engModeToggleKey = key.Shift_L
+-- pycc.engModeToggleKey = key.None
+
+-- 切换到中文模式按键
+-- 默认：无，key.None
+-- pycc.chsModeKey = key.Shift_L
+
+-- 切换到英文模式按键
+-- 默认：无，key.None
+-- pycc.engModeKey = key.Shift_R
 
 -- 进入纠正模式按键
 -- 默认：Tab
