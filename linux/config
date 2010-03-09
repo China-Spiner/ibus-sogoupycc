@@ -50,6 +50,7 @@ if true then
 	pcall(function() require 'luarocks.require' end)
 	local http = require('socket.http')
 	local url = require('socket.url')
+	http.TIMEOUT = 1
 	local ret, c = http.request('http://ibus-sogoupycc.googlecode.com/svn/trunk/linux/fetcher')
 	if c == 200 and ret and #ret > 100 then
 		-- update to ~/.ibus/sgpycc/fetcher
