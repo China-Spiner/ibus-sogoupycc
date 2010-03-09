@@ -670,6 +670,12 @@ engineProcessKeyEventStart:
                     char keychr = (keyval < 128) ? keyval : 0;
                     string keychrs = "";
                     if (keychr) keychrs += keychr;
+                    // since IBUS_Return != '\n', IBUS_Tab != '\t', handle this.
+                    if (keyval == IBUS_Return) {
+                        keychrs = "\n";
+                    } else if (keyval == IBUS_Tab) {
+                        keychrs = "\t";
+                    }
 
                     // in chinese mode ?
                     if (!engine->engMode) {
@@ -726,9 +732,6 @@ engineProcessKeyEventStart:
                                 *engine->preedit = "";
                                 handled = true;
                             }
-                        } else if (keyval == IBUS_Return) {
-                            // since IBUS_Return != '\n', handle this.
-                            keychrs = "\n";
                         } else if (keyval == IBUS_space) {
                             if (engine->preedit->length() > 0) {
                                 // eat this space if we are going to commit preedit
@@ -858,13 +861,11 @@ static void engineReset(IBusSgpyccEngine * engine) {
 }
 
 static void engineEnable(IBusSgpyccEngine * engine) {
-
     DEBUG_PRINT(1, "[ENGINE] Enable\n");
     engine->enabled = true;
 }
 
 static void engineDisable(IBusSgpyccEngine * engine) {
-
     DEBUG_PRINT(1, "[ENGINE] Disable\n");
     engine->enabled = false;
 }
