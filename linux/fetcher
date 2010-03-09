@@ -10,19 +10,20 @@ http.USERAGENT = "ibus-sogoupycc"
 keyFile = '/tmp/.sogoucloud-key'
 
 
-local py, retry, key = arg[1] or 'kong bai', 7
+local py, retry, key = arg[1] or 't'
 py = py:gsub(" ","+"):gsub("[^a-z']", '')
 
 function refreshKey()
-	local file = io.open(keyFile, 'w')
-	local ret = http.request('http://web.pinyin.sogou.com/web_ime/patch.php')
+	local ret = http.request('http://web.pinyin.sogou.com/web_ime/patch.php') or ''
 	key = ret:match('"(.-)"') or ''
-	file:write(key)
-	file:close()
+	if #key > 0 then local file = io.open(keyFile, 'w') file:write(key) file:close() end
 end
 
 local file = io.open(keyFile, 'r')
-if file then key = file:read("*line") or '' file:close() else refreshKey() end
+if file then key = file:read("*line") or '' file:close() end
+for attempt = 1, 7 do if (not key) or (#key == 0) then http.TIMEOUT = http.TIMEOUT * 1.5 refreshKey() else break end end
+
+http.TIMEOUT, retry = 0.3, 7
 
 while retry > 0 do
 	local ret = http.request('http://web.pinyin.sogou.com/api/py?key='..key..'&query='..py)
