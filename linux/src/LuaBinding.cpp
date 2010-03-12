@@ -6,13 +6,63 @@
  */
 
 #include "LuaBinding.h"
+#include "Configuration.h"
 #include "defines.h"
+#include "XUtility.h"
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
 
 
 // Lua C functions
+
+int LuaBinding::l_applySettings(lua_State* L) {
+    DEBUG_PRINT(3, "[LUABIND] l_getPhraseDatabaseLoadedCount\n");
+    LuaBinding& lb = *luaStates[L];
+
+    // database confs
+    Configuration::dbResultLimit = lb.getValue("db_result_limit", Configuration::dbResultLimit);
+    Configuration::dbLengthLimit = lb.getValue("db_length_limit", Configuration::dbLengthLimit);
+    Configuration::dbLongPhraseAdjust = lb.getValue("db_phrase_adjust", Configuration::dbLongPhraseAdjust);
+    Configuration::dbOrder = string(lb.getValue("db_query_order", Configuration::dbOrder.c_str()));
+
+    // colors (-1: use default)
+    Configuration::preeditForeColor = lb.getValue("preedit_fore_color", Configuration::preeditForeColor);
+    Configuration::preeditBackColor = lb.getValue("preedit_back_color", Configuration::preeditBackColor);
+    Configuration::requestingForeColor = lb.getValue("requesting_fore_color", Configuration::requestingForeColor);
+    Configuration::requestingBackColor = lb.getValue("requesting_back_color", Configuration::requestingBackColor);
+    Configuration::requestedForeColor = lb.getValue("responsed_fore_color", Configuration::requestedForeColor);
+    Configuration::requestedBackColor = lb.getValue("responsed_back_color", Configuration::requestedBackColor);
+    Configuration::correctingForeColor = lb.getValue("correcting_fore_color", Configuration::correctingForeColor);
+    Configuration::correctingBackColor = lb.getValue("correcting_back_color", Configuration::correctingBackColor);
+
+    // selection timeout set, user passed here is second
+    Configuration::selectionTimout = (long long) lb.getValue("sel_timeout", (double) Configuration::selectionTimout / XUtility::MICROSECOND_PER_SECOND) * XUtility::MICROSECOND_PER_SECOND;
+
+    // keys
+    Configuration::engModeToggleKey = lb.getValue("eng_mode_toggle_key", Configuration::engModeToggleKey);
+    Configuration::engModeKey = lb.getValue("eng_mode_key", Configuration::engModeKey);
+    Configuration::chsModeKey = lb.getValue("chs_mode_key", Configuration::chsModeKey);
+    Configuration::startCorrectionKey = lb.getValue("correction_mode_key", Configuration::startCorrectionKey);
+    Configuration::pageDownKey = lb.getValue("page_down_key", Configuration::pageDownKey);
+    Configuration::pageUpKey = lb.getValue("page_up_key", Configuration::pageUpKey);
+
+    // bools
+    Configuration::useDoublePinyin = lb.getValue("use_double_pinyin", Configuration::useDoublePinyin);
+    Configuration::useDoublePinyin = lb.getValue("strict_double_pinyin", Configuration::strictDoublePinyin);
+    Configuration::startInEngMode = lb.getValue("start_in_eng_mode", Configuration::startInEngMode);
+    Configuration::writeRequestCache = lb.getValue("cache_requests", Configuration::writeRequestCache);
+
+    // labels used in lookup table, ibus has 16 chars limition.
+    Configuration::tableLabelKeys = string(lb.getValue("label_keys", Configuration::tableLabelKeys.c_str()));
+    if (Configuration::tableLabelKeys.length() > 16 || Configuration::tableLabelKeys.empty()) Configuration::tableLabelKeys = Configuration::tableLabelKeys.substr(0, 16);
+
+    // external script path
+    Configuration::fetcherPath = string(lb.getValue("fetcher_path", Configuration::fetcherPath.c_str()));
+    Configuration::fetcherBufferSize = lb.getValue("fetcher_buffer_size", Configuration::fetcherBufferSize);
+
+    return 0;
+}
 
 int LuaBinding::l_getPhraseDatabaseLoadedCount(lua_State* L) {
     DEBUG_PRINT(3, "[LUABIND] l_getPhraseDatabaseLoadedCount\n");
@@ -222,19 +272,20 @@ int LuaBinding::l_setDoublePinyinScheme(lua_State *L) {
     return 1;
 }
 
-const struct luaL_Reg LuaBinding::pycclib[] = {
-    {"setDoublePinyinScheme", LuaBinding::l_setDoublePinyinScheme},
-    {"doubleToFullPinyin", LuaBinding::l_doubleToFullPinyin},
-    {"isValidDoublePinyin", LuaBinding::l_isValidDoublePinyin},
-    {"bitand", LuaBinding::l_bitand},
-    {"bitxor", LuaBinding::l_bitxor},
-    {"bitor", LuaBinding::l_bitor},
-    {"keymask", LuaBinding::l_keymask},
+const struct luaL_Reg LuaBinding::luaLibraryReg[] = {
+    {"set_double_pinyin_scheme", LuaBinding::l_setDoublePinyinScheme},
+    {"double_to_full_pinyin", LuaBinding::l_doubleToFullPinyin},
+    {"is_valid_double_pinyin", LuaBinding::l_isValidDoublePinyin},
+    //{"bitand", LuaBinding::l_bitand},
+    //{"bitxor", LuaBinding::l_bitxor},
+    //{"bitor", LuaBinding::l_bitor},
+    //{"keymask", LuaBinding::l_keymask},
     // {"printStack", LuaBinding::l_printStack},
-    {"charsToPinyin", LuaBinding::l_charsToPinyin},
-    {"setDebugLevel", LuaBinding::l_setDebugLevel},
-    {"loadDatabase", LuaBinding::l_loadPhraseDatabase},
-    {"databaseCount", LuaBinding::l_getPhraseDatabaseLoadedCount},
+    {"chars_to_pinyin", LuaBinding::l_charsToPinyin},
+    {"set_debug_level", LuaBinding::l_setDebugLevel},
+    {"load_database", LuaBinding::l_loadPhraseDatabase},
+    {"database_count", LuaBinding::l_getPhraseDatabaseLoadedCount},
+    {"apply_settings", LuaBinding::l_applySettings},
     {NULL, NULL}
 };
 
@@ -242,7 +293,7 @@ const struct luaL_Reg LuaBinding::pycclib[] = {
 
 map<const lua_State*, LuaBinding*> LuaBinding::luaStates;
 DoublePinyinScheme LuaBinding::doublePinyinScheme;
-char LuaBinding::LIB_NAME[] = "pycc";
+char LuaBinding::LIB_NAME[] = "ime";
 map<string, PinyinDatabase*> LuaBinding::pinyinDatabases;
 
 LuaBinding::LuaBinding() {
@@ -263,16 +314,18 @@ LuaBinding::LuaBinding() {
     luaL_openlibs(L);
 
     // add custom library functions. after this, stack has 1 element.
-    luaL_register(L, LIB_NAME, pycclib);
+    luaL_register(L, LIB_NAME, luaLibraryReg);
     lua_pop(L, 1);
 
     // set constants
     setValue("VERSION", VERSION);
     setValue("PKGDATADIR", PKGDATADIR);
-    setValue("USERCONFIGDIR", ((string)(g_get_user_config_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
-    setValue("USERCACHEDIR", ((string)(g_get_user_cache_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
-    setValue("USERDATADIR", ((string)(g_get_user_data_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
+    setValue("USERCONFIGDIR", ((string) (g_get_user_config_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
+    setValue("USERCACHEDIR", ((string) (g_get_user_cache_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
+    setValue("USERDATADIR", ((string) (g_get_user_data_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
     setValue("DIRSEPARATOR", G_DIR_SEPARATOR_S);
+
+    Configuration::addConstants(*this);
 
     // insert into static map, let lib function be able to lookup this class
     // L - this one-to-one relation. (Now it takes O(logN) to lookup 'this'
@@ -283,9 +336,10 @@ LuaBinding::LuaBinding() {
 void LuaBinding::staticInit() {
     // load config, modify static vars:
     // doublePinyinScheme, pinyinDatabases, etc
-    LuaBinding lb;
-    lb.setValue("firstRun", true);
-    lb.doString("dofile('" PKGDATADIR "/config')");
+    staticLuaBinding = new LuaBinding();
+    staticLuaBinding->doString("dofile('" PKGDATADIR G_DIR_SEPARATOR_S "config.lua')");
+    
+    l_applySettings(staticLuaBinding->L);
 }
 
 void LuaBinding::staticDestruct() {
@@ -297,6 +351,7 @@ void LuaBinding::staticDestruct() {
             it->second = NULL;
         }
     }
+    delete staticLuaBinding;
 }
 
 const lua_State* LuaBinding::getLuaState() const {
@@ -470,7 +525,6 @@ string LuaBinding::getValue(const char* varName, const char* defaultValue, const
 }
 
 int LuaBinding::getValue(const char* varName, const int defaultValue, const char* libName) {
-
     DEBUG_PRINT(4, "[LUABIND] getValue(int): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
@@ -485,6 +539,11 @@ int LuaBinding::getValue(const char* varName, const int defaultValue, const char
     }
     pthread_mutex_unlock(&luaStateMutex);
     return r;
+}
+
+unsigned int LuaBinding::getValue(const char* varName, const unsigned int defaultValue, const char* libName) {
+    DEBUG_PRINT(4, "[LUABIND] getValue(int): %s.%s\n", libName, varName);
+    return getValue(varName, (int) defaultValue, libName);
 }
 
 double LuaBinding::getValue(const char* varName, const double defaultValue, const char* libName) {
@@ -505,7 +564,6 @@ double LuaBinding::getValue(const char* varName, const double defaultValue, cons
 }
 
 void LuaBinding::setValue(const char* varName, const int value, const char* libName) {
-
     DEBUG_PRINT(4, "[LUABIND] setValue(int): %s.%s = %d\n", libName, varName, value);
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
@@ -519,7 +577,6 @@ void LuaBinding::setValue(const char* varName, const int value, const char* libN
 }
 
 void LuaBinding::setValue(const char* varName, const char value[], const char* libName) {
-
     DEBUG_PRINT(4, "[LUABIND] setValue(string): %s.%s = '%s'\n", libName, varName, value);
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(L, 2);
@@ -557,4 +614,10 @@ LuaBinding::~LuaBinding() {
     luaStates.erase(L);
     lua_close(L);
     pthread_mutex_destroy(&luaStateMutex);
+}
+
+LuaBinding* LuaBinding::staticLuaBinding = NULL;
+
+LuaBinding& LuaBinding::getStaticBinding() {
+    return *staticLuaBinding;
 }

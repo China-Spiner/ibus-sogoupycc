@@ -2,6 +2,9 @@
  * File:   LuaBinding.h
  * Author: WU Jun <quark@lihdd.net>
  *
+ * March 12, 2010
+ *  global conf moved from engine.cpp
+ *  many per-session settings go global
  * March 9, 2010
  *  0.1.3 global static init run first
  * March 2, 2010
@@ -41,6 +44,7 @@ public:
 
     string getValue(const char* varName, const char* defaultValue = "", const char* libName = LIB_NAME);
     int getValue(const char* varName, const int defaultValue = -1, const char* libName = LIB_NAME);
+    unsigned int getValue(const char* varName, const unsigned int defaultValue, const char* libName = LIB_NAME);
     bool getValue(const char* varName, const bool defaultValue = false, const char* libName = LIB_NAME);
     double getValue(const char* varName, const double defaultValue, const char* libName = LIB_NAME);
     void setValue(const char* varName, const int value, const char* libName = LIB_NAME);
@@ -68,13 +72,15 @@ public:
      * close dbs.
      */
     static void staticDestruct();
+    static LuaBinding& getStaticBinding();
 private:
     LuaBinding(const LuaBinding& orig);
     pthread_mutex_t luaStateMutex;
 
+    static LuaBinding* staticLuaBinding;
     // Lua C functions related
     lua_State* L;
-    static const struct luaL_Reg pycclib[];
+    static const struct luaL_Reg luaLibraryReg[];
     static map<const lua_State*, LuaBinding*> luaStates;
 
     /**
@@ -148,6 +154,12 @@ private:
      * out: int
      */
     static int l_getPhraseDatabaseLoadedCount(lua_State* L);
+    /**
+     * apply global settings immediately
+     * in: -
+     * out: -
+     */
+    static int l_applySettings(lua_State* L);
 };
 
 #endif	/* _LUAIBUSBINDING_H */

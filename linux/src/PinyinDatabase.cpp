@@ -18,6 +18,8 @@
 PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
     DEBUG_PRINT(1, "[PYDB] PinyinDatabase(%s, %.2lf)\n", dbPath.c_str(), weight);
     this->weight = weight;
+    // do not direct write to PinyinDatabase::db (for thread safe)
+    sqlite3 *db;
     if (dbPath.empty()) db = NULL;
     else if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
         db = NULL;
@@ -43,6 +45,7 @@ PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
         }
         sqlite3_free(errMessage);
     }
+    this->db = db;
 }
 
 PinyinDatabase::PinyinDatabase(const PinyinDatabase& orig) {
@@ -76,7 +79,7 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
         // "chuang qian ming yue guang"
         //        ^    ^
         //  lastPos  pos
-        if (id > lengthMax) break;
+        if ((int)id > lengthMax) break;
         string pinyin = s.substr(lastPos + 1, pos - lastPos - 1);
 
         snprintf(idString, sizeof (idString), "%d", id);

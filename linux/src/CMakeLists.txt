@@ -6,7 +6,7 @@ ELSE()
   SET(PKGDATADIR "${SHARE_INSTALL_PREFIX}/ibus-sogoupycc")
 ENDIF()
 
-ADD_EXECUTABLE(ibus-sogoupycc PinyinUtility.cpp;LuaBinding.cpp;PinyinDatabase.cpp;PinyinCloudClient.cpp;engine.cpp;XUtility.cpp;main.cpp)
+ADD_EXECUTABLE(ibus-sogoupycc PinyinUtility.cpp;LuaBinding.cpp;PinyinDatabase.cpp;PinyinCloudClient.cpp;engine.cpp;XUtility.cpp;Configuration.cpp;main.cpp)
 
 # Archlinux, OS X use 'lua' as pkg-config name
 # While debian/ubuntu uses 'lua5.1'

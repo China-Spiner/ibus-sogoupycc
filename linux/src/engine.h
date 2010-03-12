@@ -2,6 +2,8 @@
  * File:   engine.h
  * Author: WU Jun <quark@lihdd.net>
  *
+ * March 12, 2010
+ *  use global static luaBinding. All settings go global
  * March 9, 2010
  *  0.1.3 separate lua global / session init
  * March 2, 2010

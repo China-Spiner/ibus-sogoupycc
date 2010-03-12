@@ -85,6 +85,7 @@ void* staticInitThreadFunc(void*) {
 
     // load global config (may contain dict loading and online update checking)
     LuaBinding::staticInit();
+    return NULL;
 }
 
 int main(int argc, char *argv[]) {
