@@ -257,7 +257,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     add_key_const(Delete);
 #undef add_key_const
     engine->luaBinding->setValue("None", IBUS_VoidSymbol, "key");
-    
+
     // set values
     engine->luaBinding->setValue("preedit", "");
     engine->luaBinding->doString(
@@ -353,16 +353,10 @@ static void engineInit(IBusSgpyccEngine *engine) {
     // punctuation map is stored in lua state, since it is complicated, do not store it here
 
     // database confs
-    engine->dbResultLimit = engine->luaBinding->getValue("dbLimit", 64);
+    engine->dbResultLimit = engine->luaBinding->getValue("dbLimit", 32);
     engine->dbLengthLimit = engine->luaBinding->getValue("dbLength", 6);
     engine->dbLongPhraseAdjust = engine->luaBinding->getValue("dbPhraseAdjust", 1.0);
     engine->dbOrder = new string(engine->luaBinding->getValue("dbOrder", ""));
-
-    if (engine->dbOrder->length() == 0) {
-        if (LuaBinding::pinyinDatabases.size() > 0) *engine->dbOrder = "d";
-
-        else *engine->dbOrder = "2";
-    }
 
     // read in colors (-1: use default)
     engine->preeditForeColor = engine->luaBinding->getValue("preeditForeColor", 0x0050FF);
@@ -556,7 +550,15 @@ engineProcessKeyEventStart:
             // update and show lookup table
             // according to dbOrder
             engineClearLookupTable(engine);
-            for (const char *dbo = engine->dbOrder->c_str(); *dbo; ++dbo)
+
+            // default: use external dict if possible
+            string dbOrder = *engine->dbOrder;
+            if (dbOrder.empty()) {
+                if (LuaBinding::pinyinDatabases.size() > 0) dbOrder = "d";
+                else dbOrder = "2";
+            }
+
+            for (const char *dbo = dbOrder.c_str(); *dbo; ++dbo)
                 switch (*dbo) {
                     case '2':
                     {

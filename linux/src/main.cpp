@@ -77,6 +77,14 @@ static void init(int mode) {
     g_object_unref(component);
 }
 
+void* staticInitThreadFunc(void*) {
+    // static selection clipboard monitor
+    XUtility::staticInit();
+
+    // load global config (may contain dict loading and online update checking)
+    LuaBinding::staticInit();
+}
+
 int main(int argc, char *argv[]) {
     // redirect output
     if (getenv("SGPYZCC_REDIRECT_OUTPUT")) {
@@ -93,8 +101,18 @@ int main(int argc, char *argv[]) {
     gdk_init(&argc, &argv);
     gtk_init(&argc, &argv);
 
-    // selection clipboard monitor
-    XUtility::staticInit();
+    // static init in background, prevent user from feeling delay
+    pthread_t staticInitThread;
+    pthread_attr_t threadAttr;
+
+    pthread_attr_init(&threadAttr);
+    pthread_attr_setdetachstate(&threadAttr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_destroy(&threadAttr);
+    if (pthread_create(&staticInitThread, &threadAttr, &staticInitThreadFunc, NULL)) {
+        fprintf(stderr, "Can not create init thread!\n");
+        exit(EXIT_FAILURE);
+    }
+
 
     // simple argc parser
     if (argc > 1) {
@@ -102,10 +120,6 @@ int main(int argc, char *argv[]) {
     } else {
         init(1);
     }
-
-    // load static data
-    LuaBinding::staticInit();
-
 
     ibus_main();
 

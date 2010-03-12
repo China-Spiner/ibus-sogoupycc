@@ -104,16 +104,16 @@ void PinyinCloudClient::request(const string requestString, FetchFunc fetchFunc,
 
     DEBUG_PRINT(4, "[CLOUD.REQUEST] going to create thread\n");
     // launch thread
-    pthread_t request_thread;
+    pthread_t requestThread;
     pthread_attr_t requestThreadAttr;
     int ret;
 
     pthread_attr_init(&requestThreadAttr);
     pthread_attr_setdetachstate(&requestThreadAttr, PTHREAD_CREATE_DETACHED);
 
-    ret = pthread_create(&request_thread, &requestThreadAttr, &requestThreadFunc, (void*) data);
+    ret = pthread_create(&requestThread, &requestThreadAttr, &requestThreadFunc, (void*) data);
     pthread_attr_destroy(&requestThreadAttr);
-    DEBUG_PRINT(1, "[CLOUD.REQUEST] new thread: 0x%x\n", (int) request_thread);
+    DEBUG_PRINT(1, "[CLOUD.REQUEST] new thread: 0x%x\n", (int) requestThread);
 
     if (ret != 0) {
         perror("[ERROR] can not create request thread");

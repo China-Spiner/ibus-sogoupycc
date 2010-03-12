@@ -14,6 +14,13 @@
 
 // Lua C functions
 
+int LuaBinding::l_getPhraseDatabaseLoadedCount(lua_State* L) {
+    DEBUG_PRINT(3, "[LUABIND] l_getPhraseDatabaseLoadedCount\n");
+    lua_checkstack(L, 1);
+    lua_pushinteger(L, pinyinDatabases.size());
+    return 1;
+}
+
 int LuaBinding::l_loadPhraseDatabase(lua_State* L) {
     DEBUG_PRINT(3, "[LUABIND] l_loadPhraseDatabase\n");
     luaL_checktype(L, 1, LUA_TSTRING);
@@ -75,53 +82,72 @@ int LuaBinding::l_printStack(lua_State *L) {
 
 int LuaBinding::l_keymask(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_keymask\n");
+    LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
     luaL_checktype(L, 1, LUA_TNUMBER);
     luaL_checktype(L, 2, LUA_TNUMBER);
     lua_checkstack(L, 1);
     lua_pushboolean(L, (lua_tointeger(L, 1) & lua_tointeger(L, 2)) == lua_tointeger(L, 2));
+    pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }
 
 int LuaBinding::l_bitand(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_bitand\n");
+    LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
     luaL_checktype(L, 1, LUA_TNUMBER);
     luaL_checktype(L, 2, LUA_TNUMBER);
     lua_checkstack(L, 1);
     lua_pushinteger(L, lua_tointeger(L, 1) & lua_tointeger(L, 2));
+    pthread_mutex_unlock(&lib->luaStateMutex);
+
     return 1;
 }
 
 int LuaBinding::l_bitxor(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_bitxor\n");
+    LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
     luaL_checktype(L, 1, LUA_TNUMBER);
     luaL_checktype(L, 2, LUA_TNUMBER);
     lua_checkstack(L, 1);
     lua_pushinteger(L, lua_tointeger(L, 1) ^ lua_tointeger(L, 2));
+    pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }
 
 int LuaBinding::l_bitor(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_bitor\n");
+    LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
     luaL_checktype(L, 1, LUA_TNUMBER);
     luaL_checktype(L, 2, LUA_TNUMBER);
     lua_checkstack(L, 1);
     lua_pushinteger(L, lua_tointeger(L, 1) | lua_tointeger(L, 2));
+    pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }
 
 int LuaBinding::l_isValidPinyin(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_isValidPinyin\n");
+    LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
     luaL_checktype(L, 1, LUA_TSTRING);
     lua_checkstack(L, 1);
     lua_pushboolean(L, PinyinUtility::isValidPinyin(lua_tostring(L, 1)));
+    pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }
 
 int LuaBinding::l_charsToPinyin(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_charsToPinyin\n");
+    LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
     luaL_checktype(L, 1, LUA_TSTRING);
     lua_checkstack(L, 1);
     lua_pushstring(L, PinyinUtility::charactersToPinyins(lua_tostring(L, 1)).c_str());
+    pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }
 
@@ -131,28 +157,32 @@ int LuaBinding::l_charsToPinyin(lua_State *L) {
  */
 int LuaBinding::l_isValidDoublePinyin(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_isValidDoublePinyin\n");
-    luaL_checktype(L, 1, LUA_TSTRING);
     LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
+    luaL_checktype(L, 1, LUA_TSTRING);
     lua_checkstack(L, 1);
     lua_pushboolean(L, lib->doublePinyinScheme.isValidDoublePinyin(lua_tostring(L, 1)));
+    pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }
 
 int LuaBinding::l_doubleToFullPinyin(lua_State *L) {
     DEBUG_PRINT(2, "[LUABIND] l_doubleToFullPinyin\n");
-    luaL_checktype(L, 1, LUA_TSTRING);
     LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
+    luaL_checktype(L, 1, LUA_TSTRING);
     lua_checkstack(L, 1);
     lua_pushstring(L, lib->doublePinyinScheme.query(lua_tostring(L, 1)).c_str());
+    pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }
 
 int LuaBinding::l_setDoublePinyinScheme(lua_State *L) {
-
     DEBUG_PRINT(1, "[LUABIND] setDoublePinyinScheme\n");
+    LuaBinding* lib = luaStates[L];
+    pthread_mutex_lock(&lib->luaStateMutex);
     luaL_checktype(L, 1, LUA_TTABLE);
 
-    LuaBinding* lib = luaStates[L];
     lib->doublePinyinScheme.clear();
 
     lua_checkstack(L, 5);
@@ -188,6 +218,7 @@ int LuaBinding::l_setDoublePinyinScheme(lua_State *L) {
     }
     // return conflict count
     lua_pushinteger(L, lib->doublePinyinScheme.buildMap());
+    pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }
 
@@ -203,6 +234,7 @@ const struct luaL_Reg LuaBinding::pycclib[] = {
     {"charsToPinyin", LuaBinding::l_charsToPinyin},
     {"setDebugLevel", LuaBinding::l_setDebugLevel},
     {"loadDatabase", LuaBinding::l_loadPhraseDatabase},
+    {"databaseCount", LuaBinding::l_getPhraseDatabaseLoadedCount},
     {NULL, NULL}
 };
 
@@ -225,7 +257,7 @@ LuaBinding::LuaBinding() {
         exit(EXIT_FAILURE);
     }
     pthread_mutexattr_destroy(&luaStateMutexAttribute);
-    
+
     // init lua state
     L = lua_open();
     luaL_openlibs(L);
@@ -234,15 +266,18 @@ LuaBinding::LuaBinding() {
     luaL_register(L, LIB_NAME, pycclib);
     lua_pop(L, 1);
 
-    // set static information
+    // set constants
     setValue("VERSION", VERSION);
     setValue("PKGDATADIR", PKGDATADIR);
+    setValue("USERCONFIGDIR", ((string)(g_get_user_config_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
+    setValue("USERCACHEDIR", ((string)(g_get_user_cache_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
+    setValue("USERDATADIR", ((string)(g_get_user_data_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
+    setValue("DIRSEPARATOR", G_DIR_SEPARATOR_S);
 
     // insert into static map, let lib function be able to lookup this class
     // L - this one-to-one relation. (Now it takes O(logN) to lookup 'this'
     // from L. Any way to make it more smooth?)
     luaStates[L] = this;
-
 }
 
 void LuaBinding::staticInit() {
@@ -261,7 +296,7 @@ void LuaBinding::staticDestruct() {
             delete it->second;
             it->second = NULL;
         }
-    }    
+    }
 }
 
 const lua_State* LuaBinding::getLuaState() const {
@@ -275,11 +310,13 @@ const lua_State* LuaBinding::getLuaState() const {
 int LuaBinding::doString(const char* luaScript) {
 
     DEBUG_PRINT(3, "[LUABIND] doString(%s)\n", luaScript);
+    pthread_mutex_lock(&luaStateMutex);
     int r = luaL_dostring(L, luaScript);
     if (r) {
         fprintf(stderr, "%s\n", lua_tostring(L, -1));
         lua_pop(L, 1);
     }
+    pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
 
@@ -320,7 +357,7 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
         // function not found, here just ignore and skip.
         ret = -1;
         lua_pop(state, 2); // pop nil and libname
-        goto callLuaFunction_exit;
+        goto aborting;
     }
 
     for (narg = 0; *sig; ++narg, ++sig) {
@@ -339,20 +376,16 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
 
 
     nres = strlen(sig);
-    // prevent dead lock
-    pthread_mutex_unlock(&luaStateMutex);
-
+    // since we use recursive mutex here, no unlock needed
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Params pushed\n");
     if ((ret = lua_pcall(state, narg, nres, 0)) != 0) {
         fprintf(stderr, "error calling lua function '%s.%s': %s.\nprogram is likely to crash soon\n", LIB_NAME, funcName, lua_tostring(state, -1));
         lua_pop(state, 2); // pop err string and libname
     }
-
-    pthread_mutex_lock(&luaStateMutex);
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Pcall finished\n");
 
     // report error early.
-    if (ret != 0) goto callLuaFunction_exit;
+    if (ret != 0) goto aborting;
 
     for (int pres = -nres; *sig; ++pres, ++sig) {
         switch (*sig) {
@@ -381,7 +414,7 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Stack size: %d, result count: %d\n", lua_gettop(state), nres);
     lua_pop(state, nres + 1); // pop ret values and lib name
 
-callLuaFunction_exit:
+aborting:
     // pop values before enter here
     pthread_mutex_unlock(&luaStateMutex);
 

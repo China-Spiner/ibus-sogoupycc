@@ -8,8 +8,8 @@
 --------------------------------------------------------------------------------
 
 
--- 若用户配置文件 (~/.ibus/sgpycc/config)存在，则只加载用户配置文件
-if not useUserConfig then local userConfig = os.getenv('HOME')..'/.ibus/sgpycc/config' local file = io.open(userConfig, 'r') if file then file:close() useUserConfig = true dofile(userConfig) return end end
+-- 若用户配置文件存在，则只加载用户配置文件
+if not useUserConfig then local userConfig = pycc.USERCONFIGDIR..'/config' local file = io.open(userConfig, 'r') if file then file:close() useUserConfig = true dofile(userConfig) return end end
 
 
 
@@ -46,19 +46,19 @@ dbs:close()
 
 -- 自动更新用户 fetcher 脚本，如果你不愿意这样做，请将 true 改为 false
 if true then
-	os.execute("mkdir '"..os.getenv('HOME')..'/.ibus/sgpycc/'.."' -p")
+	os.execute("mkdir '"..pycc.USERCACHEDIR.."' -p")
 	pcall(function() require 'luarocks.require' end)
 	local http = require('socket.http')
 	local url = require('socket.url')
 	http.TIMEOUT = 0.5
 	local ret, c = http.request('http://ibus-sogoupycc.googlecode.com/svn/trunk/linux/fetcher')
 	if c == 200 and ret and #ret > 100 then
-		-- update to ~/.ibus/sgpycc/fetcher
-		local fetcherFile = io.open(os.getenv('HOME')..'/.ibus/sgpycc/fetcher','w')
+		-- update fetcher
+		local fetcherFile = io.open(pycc.USERCACHEDIR..'/fetcher','w')
 		fetcherFile:write(ret)
 		fetcherFile:close()
 		-- make it executable
-		os.execute("chmod +x '"..os.getenv('HOME')..'/.ibus/sgpycc/fetcher'.."'")
+		os.execute("chmod +x '"..pycc.USERCACHEDIR..'/fetcher'.."'")
 		print('User fetcher script updated')
 	end
 end
@@ -90,7 +90,7 @@ if pycc.sessionInit then
 -- 字词库 ----------------------------------------------------------------------
 
 -- 纠正模式下数据库使用顺序
--- 默认：如果已经加载了至少一个外部字词库，为 'd' ，否则为 '2'
+-- 默认："" 如果已经加载了至少一个外部字词库，为 'd' ，否则为 '2'
 -- 注："2" 为内部 gb2312 单字库（简体，将音调列出）
 -- "d" 为外部字词库 (ibus-pinyin 1.2.99 兼容)
 -- '2d' 即为，先列出内部 gb2312 单字库，紧跟着列出外部字词库 (如果有的话)
@@ -98,7 +98,7 @@ if pycc.sessionInit then
 -- pycc.dbOrder = '2d'
 
 -- 外部字词库结果限制，0 为无限制
--- 默认：64，每个字词库每个长度的结果最多 64 个
+-- 默认：32，每个字词库每个长度的结果最多 32 个
 -- pycc.dbLimit = 0
 
 -- 外部词库返回结果长度限制，应该在 1 到 15 之间
@@ -174,7 +174,7 @@ requestCache = {
 -- 标准输出第一行中，该脚本需处理超时情况，若出现错误，应该输出一空行
 -- 目前设置为，如果有用户 fetcher 脚本存在，则使用用户脚本
 -- 自动更新机制将维护用户 fetcher 脚本
-local userFetcher = os.getenv('HOME')..'/.ibus/sgpycc/fetcher'
+local userFetcher = pycc.USERCACHEDIR..'/fetcher'
 local file = io.open(userFetcher, 'r')
 if file then file:close() pycc.fetcher = userFetcher end
 

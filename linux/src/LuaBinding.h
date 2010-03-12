@@ -142,6 +142,12 @@ private:
      * out: int
      */
     static int l_loadPhraseDatabase(lua_State *L);
+    /**
+     * get database loaded count
+     * in: -
+     * out: int
+     */
+    static int l_getPhraseDatabaseLoadedCount(lua_State* L);
 };
 
 #endif	/* _LUAIBUSBINDING_H */
