@@ -12,12 +12,36 @@
 #include "PinyinDatabase.h"
 #include "defines.h"
 
+#define DB_CACHE_SIZE "16384"
+#define DB_PREFETCH_LEN 6 
+
 PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
     DEBUG_PRINT(1, "[PYDB] PinyinDatabase(%s, %.2lf)\n", dbPath.c_str(), weight);
     this->weight = weight;
     if (dbPath.empty()) db = NULL;
     else if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
         db = NULL;
+    }
+    if (db) {
+        // set PRAGMA parameters
+        string sql = "PRAGMA cache_size = " DB_CACHE_SIZE ";\n";
+        sql += "PRAGMA temp_store = MEMORY;\n";
+        char *errMessage;
+        if (sqlite3_exec(db, sql.c_str(), NULL, NULL, &errMessage) == SQLITE_OK) {
+            // prefetch then
+            sql = "";
+            for (size_t i = 0; i < DB_PREFETCH_LEN; i++) {
+                char buf[8];
+                snprintf(buf, sizeof(buf), "%d", i);
+                sql += string("SELECT * FROM py_phrase_") + buf + ";\n";
+            }
+            sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
+        } else {
+            fprintf(stderr, "%s", errMessage);
+            sqlite3_close(db);
+            db = NULL;
+        }
+        sqlite3_free(errMessage);
     }
 }
 

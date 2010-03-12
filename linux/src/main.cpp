@@ -3,6 +3,8 @@
  * Author: WU Jun <quark@lihdd.net>
  *
  *
+ * March 12, 2010
+ *  move static init to background.
  * November 3, 2009
  *  created.
  */

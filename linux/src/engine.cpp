@@ -354,7 +354,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
 
     // database confs
     engine->dbResultLimit = engine->luaBinding->getValue("dbLimit", 32);
-    engine->dbLengthLimit = engine->luaBinding->getValue("dbLength", 6);
+    engine->dbLengthLimit = engine->luaBinding->getValue("dbLength", 5);
     engine->dbLongPhraseAdjust = engine->luaBinding->getValue("dbPhraseAdjust", 1.0);
     engine->dbOrder = new string(engine->luaBinding->getValue("dbOrder", ""));
 
