@@ -36,6 +36,7 @@ struct _IBusSgpyccEngine {
 
     // in lookup table, how many pages user has turned
     int tablePageNumber;
+    size_t lookupTableLabelCount;
 
     // preedit: real key seq from user input, activePreedit: preedit on screen
     // they are not same if useDoublePinyin is true, the later shows full pinyin
@@ -200,16 +201,23 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->lastKeyval = 0;
 
     // lookup table
-    engine->table = ibus_lookup_table_new(Configuration::tableLabelKeys.length(), 0, 0, 0);
+    engine->lookupTableLabelCount = Configuration::tableLabelKeys.size();
+    engine->table = ibus_lookup_table_new(engine->lookupTableLabelCount, 0, 0, 0);
 
     // ibus_lookup_table_set_orientation() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
     // and since ibus-1.2.0.20090927 and ibus-1.2.0.20100111 use same version defines, program can not tell
     // if ibus_lookup_table_set_orientation() is available.
 
-    for (size_t i = 0; i < Configuration::tableLabelKeys.length(); i++) {
-        IBusText* text = ibus_text_new_from_printf("%c", Configuration::tableLabelKeys.data()[i]);
+    for (size_t i = 0; i < engine->lookupTableLabelCount; i++) {
+        IBusText* text = ibus_text_new_from_printf("%s", Configuration::tableLabelKeys[i].getLabel().c_str());
         ibus_lookup_table_append_label(engine->table, text);
         g_object_unref(text);
+    }
+
+    if (engine->lookupTableLabelCount <= 0) {
+        // fatal error
+        fprintf(stderr, "FATAL Error: ime.label_keys invalid!\n");
+        exit(EXIT_FAILURE);
     }
 
     // punctuation map
@@ -337,7 +345,13 @@ engineProcessKeyEventStart:
             goto engineProcessKeyEventStart;
         } else {
             // test if user press a key that in lookup table
-            size_t pos = Configuration::tableLabelKeys.find((char) keyval);
+            size_t pos = string::npos;
+            for (size_t i = 0; i < engine->lookupTableLabelCount; ++i){
+                if (Configuration::tableLabelKeys[i].match(keyval)) {
+                    pos = i;
+                    break;
+                }
+            }
             if (pos == string::npos) {
                 // not found, user press invalid key, just ignore it
                 // IMPROVE: beep here (system call?)

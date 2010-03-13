@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
+#include <ibus-1.0/ibuskeysyms.h>
 
 
 // Lua C functions
@@ -51,9 +52,33 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::writeRequestCache = lb.getValue("cache_requests", Configuration::writeRequestCache);
 
     // labels used in lookup table, ibus has 16 chars limition.
-    Configuration::tableLabelKeys = string(lb.getValue("label_keys", Configuration::tableLabelKeys.c_str()));
-    if (Configuration::tableLabelKeys.length() > 16 || Configuration::tableLabelKeys.empty()) Configuration::tableLabelKeys = Configuration::tableLabelKeys.substr(0, 16);
-
+    {
+        switch (lb.getValueType("label_keys")) {
+            case LUA_TSTRING:
+            {
+                Configuration::tableLabelKeys.clear();
+                string tableLabelKeys = lb.getValue("label_keys", "");
+                for (size_t i = 0; i < tableLabelKeys.length(); i++) {
+                    Configuration::tableLabelKeys.push_back(tableLabelKeys.c_str()[i]);
+                }
+                break;
+            }
+            case LUA_TTABLE:
+            {
+                Configuration::tableLabelKeys.clear();
+                char buffer[128];
+                for (size_t index = 1;; index++) {
+                    snprintf(buffer, sizeof (buffer), "%s..%u", "label_keys", index);
+                    // key is at index -2 and value is at index -1
+                    // key should be a string or a number
+                    Configuration::ImeKey key = IBUS_VoidSymbol;
+                    if (!key.readFromLua(lb, buffer)) break; else Configuration::tableLabelKeys.push_back(key);
+                }
+                break;
+            }
+        }
+    }
+    
     // external script path
     Configuration::fetcherPath = string(lb.getValue("fetcher_path", Configuration::fetcherPath.c_str()));
     Configuration::fetcherBufferSize = lb.getValue("fetcher_buffer_size", Configuration::fetcherBufferSize);
@@ -548,6 +573,7 @@ int LuaBinding::reachValue(const char* varName, const char* libName) {
             DEBUG_PRINT(6, "[LUABIND] number: %s\n", name.c_str());
             sscanf(name.c_str(), "%d", &id);
             lua_pushnumber(L, id);
+            nextIsNumber = false;
         } else {
             DEBUG_PRINT(6, "[LUABIND] string: %s\n", name.c_str());
             lua_pushstring(L, name.c_str());
@@ -621,44 +647,44 @@ int LuaBinding::getValueType(const char* varName, const char* libName) {
 
 void LuaBinding::setValue(const char* varName, const int value, const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] setValue(int): %s.%s = %d\n", libName, varName, value);
-            pthread_mutex_lock(&luaStateMutex);
-            lua_checkstack(L, 2);
-            lua_getglobal(L, libName);
+    pthread_mutex_lock(&luaStateMutex);
+    lua_checkstack(L, 2);
+    lua_getglobal(L, libName);
     if (lua_istable(L, -1)) {
 
         lua_pushinteger(L, value);
-                lua_setfield(L, -2, varName); //it will pop value
+        lua_setfield(L, -2, varName); //it will pop value
     }
     lua_pop(L, 1);
-            pthread_mutex_unlock(&luaStateMutex);
+    pthread_mutex_unlock(&luaStateMutex);
 }
 
 void LuaBinding::setValue(const char* varName, const char value[], const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] setValue(string): %s.%s = '%s'\n", libName, varName, value);
-            pthread_mutex_lock(&luaStateMutex);
-            lua_checkstack(L, 2);
-            lua_getglobal(L, libName);
+    pthread_mutex_lock(&luaStateMutex);
+    lua_checkstack(L, 2);
+    lua_getglobal(L, libName);
     if (lua_istable(L, -1)) {
 
         lua_pushstring(L, value);
-                lua_setfield(L, -2, varName); //it will pop value
+        lua_setfield(L, -2, varName); //it will pop value
     }
     lua_pop(L, 1);
-            pthread_mutex_unlock(&luaStateMutex);
+    pthread_mutex_unlock(&luaStateMutex);
 }
 
 void LuaBinding::setValue(const char* varName, const bool value, const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] setValue(boolean): %s.%s = %s\n", libName, varName, value ? "true" : "false");
-            pthread_mutex_lock(&luaStateMutex);
-            lua_checkstack(L, 2);
-            lua_getglobal(L, libName);
+    pthread_mutex_lock(&luaStateMutex);
+    lua_checkstack(L, 2);
+    lua_getglobal(L, libName);
     if (lua_istable(L, -1)) {
 
         lua_pushboolean(L, value);
-                lua_setfield(L, -2, varName); //it will pop value
+        lua_setfield(L, -2, varName); //it will pop value
     }
     lua_pop(L, 1);
-            pthread_mutex_unlock(&luaStateMutex);
+    pthread_mutex_unlock(&luaStateMutex);
 }
 
 /**
@@ -671,13 +697,13 @@ LuaBinding::LuaBinding(const LuaBinding& orig) {
 LuaBinding::~LuaBinding() {
 
     DEBUG_PRINT(1, "[LUABIND] Destroy\n");
-            luaStates.erase(L);
-            lua_close(L);
-            pthread_mutex_destroy(&luaStateMutex);
+    luaStates.erase(L);
+    lua_close(L);
+    pthread_mutex_destroy(&luaStateMutex);
 }
 
 LuaBinding* LuaBinding::staticLuaBinding = NULL;
 
-        LuaBinding& LuaBinding::getStaticBinding() {
+LuaBinding& LuaBinding::getStaticBinding() {
     return *staticLuaBinding;
 }

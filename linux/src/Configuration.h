@@ -54,7 +54,10 @@ namespace Configuration {
     class ImeKey {
     public:
         ImeKey(const unsigned int keyval);
-        void readFromLua(LuaBinding& luaBinding, const string& varName);
+        /**
+         * @return true if success
+         */
+        bool readFromLua(LuaBinding& luaBinding, const string& varName);
         const bool match(const unsigned int keyval) const;
         const string getLabel() const;
     private:
@@ -69,7 +72,7 @@ namespace Configuration {
     extern int fetcherBufferSize;
 
     // keys used in select item in lookup table
-    extern string tableLabelKeys;
+    extern vector<ImeKey> tableLabelKeys;
 
     // colors
     extern int requestingBackColor, requestingForeColor;

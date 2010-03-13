@@ -16,7 +16,7 @@ namespace Configuration {
     int fetcherBufferSize = 1024;
 
     // keys used in select item in lookup table
-    string tableLabelKeys = "jkl;uiopasdf";
+    vector<ImeKey> tableLabelKeys;
 
     // colors
     int requestingBackColor = 0xB8CFE5, requestingForeColor = INVALID_COLOR;
@@ -114,7 +114,7 @@ namespace Configuration {
         return label;
     }
 
-    void ImeKey::readFromLua(LuaBinding& luaBinding, const string& varName) {
+    bool ImeKey::readFromLua(LuaBinding& luaBinding, const string& varName) {
         switch (luaBinding.getValueType(varName.c_str())) {
             case LUA_TTABLE:
             {
@@ -122,6 +122,7 @@ namespace Configuration {
                 // multi keys
                 char buffer[128];
                 label = luaBinding.getValue((varName + ".label").c_str(), "");
+                DEBUG_PRINT(5, "[CONF] Multi hot key - label: '%s'\n", label.c_str());
                 for (size_t index = 1;; index++) {
                     snprintf(buffer, sizeof (buffer), "%s..%u", varName.c_str(), index);
                     unsigned int key = IBUS_VoidSymbol;
@@ -139,7 +140,7 @@ namespace Configuration {
                     } else break;
                 }
                 DEBUG_PRINT(4, "[CONF] Multi hot key %s - size: %d\n", label.c_str(), keys.size());
-                break;
+                return true;
             }
             case LUA_TNUMBER:
             {
@@ -147,7 +148,7 @@ namespace Configuration {
                 unsigned key = luaBinding.getValue(varName.c_str(), (unsigned int) IBUS_VoidSymbol);
                 keys.insert(key);
                 label = string("") + (char) key;
-                break;
+                return true;
             }
             case LUA_TSTRING:
             {
@@ -155,11 +156,11 @@ namespace Configuration {
                 unsigned key = luaBinding.getValue(varName.c_str(), "\f")[0];
                 keys.insert(key);
                 label = string("") + (char) key;
-                break;
+                return true;
             }
             default:
                 // do nothing, keep current value
-                break;
+                return false;
         }
     }
 
@@ -200,6 +201,20 @@ namespace Configuration {
         Configuration::punctuationMap.setPunctuationPair('\\', FullPunctuation("、"));
         Configuration::punctuationMap.setPunctuationPair('\'', FullPunctuation(2, "‘", "’"));
         Configuration::punctuationMap.setPunctuationPair('\"', FullPunctuation(2, "“", "”"));
+
+        // tableLabelKeys = "jkl;uiopasdf";
+        tableLabelKeys.push_back( 'j');
+        tableLabelKeys.push_back('k');
+        tableLabelKeys.push_back('l');
+        tableLabelKeys.push_back(';');
+        tableLabelKeys.push_back('u');
+        tableLabelKeys.push_back('i');
+        tableLabelKeys.push_back('o');
+        tableLabelKeys.push_back('p');
+        tableLabelKeys.push_back('a');
+        tableLabelKeys.push_back('s');
+        tableLabelKeys.push_back('d');
+        tableLabelKeys.push_back('f');
     }
 
     void addConstantsToLua(LuaBinding& luaBinding) {
