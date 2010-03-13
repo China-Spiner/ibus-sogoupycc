@@ -1,8 +1,6 @@
 /*
  * File:   XUtility.cpp
  * Author: WU Jun <quark@lihdd.net>
- *
- * see .h file for changelog
  */
 
 #include "XUtility.h"

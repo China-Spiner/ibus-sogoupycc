@@ -1,8 +1,6 @@
 /*
  * File:   PinyinDatabase.h
- * Author: WU Jun
- *
- * see .h file for changelog
+ * Author: WU Jun <quark@lihdd.net>
  */
 
 #include <cstdio>

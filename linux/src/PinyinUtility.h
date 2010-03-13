@@ -1,7 +1,9 @@
 /* 
  * File:   PinyinUtility.h
  * Author: WU Jun <quark@lihdd.net>
- * 
+ *
+ * March 13, 2010
+ *  split out DoublePinyinScheme
  * February 28, 2010
  *  0.1.1 major bugs fixed
  * February 27, 2010
@@ -27,7 +29,6 @@
 using std::map;
 using std::multimap;
 using std::set;
-using std::vector;
 using std::string;
 using std::pair;
 
@@ -76,29 +77,6 @@ private:
     static const set<string> validPinyins;
     static set<string> validPartialPinyins;
     static void staticInitializer();
-};
-
-// DoublePinyinScheme
-
-class DoublePinyinScheme {
-public:
-    DoublePinyinScheme();
-    DoublePinyinScheme(const DoublePinyinScheme& orig);
-
-    void bindKey(const char key, const string& consonant, const vector<string>& vowels);
-    void clear();
-    const int buildMap();
-    const string query(const char firstChar, const char secondChar);
-    const string query(const string& doublePinyinString);
-    const bool isValidDoublePinyin(const string& doublePinyinString);
-    const bool isKeyBinded(const char key);
-
-    virtual ~DoublePinyinScheme();
-
-private:
-    bool mapBuilt;
-    map<char, pair<string, vector<string> > > bindedKeys;
-    map<pair<char, char>, string> queryMap;
 };
 
 #endif	/* _PINYINUTILITY_H */

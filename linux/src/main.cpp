@@ -24,8 +24,7 @@
 #include "PinyinCloudClient.h"
 #include "LuaBinding.h"
 #include "XUtility.h"
-
-int globalDebugLevel = 0;
+#include "Configuration.h"
 
 static IBusBus *bus = NULL; // Connect with IBus daemon.
 static IBusFactory *factory = NULL;
@@ -34,7 +33,7 @@ static void ibus_disconnected_cb(IBusBus *bus, gpointer user_data) {
     ibus_quit();
 }
 
-static void init(int mode) {
+static void ibusRegister(bool callByIbus) {
     IBusComponent *component;
 
     ibus_init();
@@ -66,16 +65,9 @@ static void init(int mode) {
             PKGDATADIR "/icons/ibus-sogoupycc.png",
             "en"));
 
-    switch (mode) {
-        case 1:
-            // stand alone
-            ibus_bus_register_component(bus, component);
-            break;
-        case 2:
-            // called by ibus
-            ibus_bus_request_name(bus, "org.freedesktop.IBus.sgycc", 0);
-            break;
-    }
+    if (callByIbus) ibus_bus_request_name(bus, "org.freedesktop.IBus.sgycc", 0);
+    else ibus_bus_register_component(bus, component);
+
     g_object_unref(component);
 }
 
@@ -89,6 +81,24 @@ void* staticInitThreadFunc(void*) {
 }
 
 int main(int argc, char *argv[]) {
+    // version
+    if (argc > 1 && strstr(argv[1], "-v")) {
+        printf("ibus-sogoupycc version: %s\n", VERSION);
+        exit(EXIT_SUCCESS);
+    }
+
+    // help
+    if (argc > 1 && strstr(argv[1], "-h")) {
+        printf("ibus-sogoupycc --version | --help | --debug | --ibus\n");
+        printf("\t--version\t show version\n");
+        printf("\t--help\t show this information\n");
+        printf("\t--debug\t set debug level to full at startup\n");
+        printf("\t--ibus\t launched by ibus\n");
+        exit(EXIT_SUCCESS);
+    }
+
+    if ((argc > 1 && strstr(argv[1], "-d")) || getenv("DEBUG")) globalDebugLevel = 10;
+
     // redirect output
     if (getenv("SGPYZCC_REDIRECT_OUTPUT")) {
         freopen("/tmp/.sgpycc.out", "w", stdout);
@@ -104,10 +114,12 @@ int main(int argc, char *argv[]) {
     gdk_init(&argc, &argv);
     gtk_init(&argc, &argv);
 
-    // static init in background, prevent user from feeling delay
+    // global configuration init, be first
+    Configuration::staticInit();
+
+    // other static init in background, prevent user from feeling delay
     pthread_t staticInitThread;
     pthread_attr_t threadAttr;
-
     pthread_attr_init(&threadAttr);
     pthread_attr_setdetachstate(&threadAttr, PTHREAD_CREATE_DETACHED);
     pthread_attr_destroy(&threadAttr);
@@ -116,13 +128,8 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-
     // simple argc parser
-    if (argc > 1) {
-        init(2);
-    } else {
-        init(1);
-    }
+    ibusRegister(argc > 1 && strstr(argv[1], "-i"));
 
     ibus_main();
 

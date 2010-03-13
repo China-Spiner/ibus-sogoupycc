@@ -1,8 +1,6 @@
 /* 
  * File:   PinyinCloudClient.cpp
  * Author: WU Jun <quark@lihdd.net>
- *
- * see .h file for changelog
  */
 
 #include "PinyinCloudClient.h"

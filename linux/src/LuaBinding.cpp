@@ -1,8 +1,6 @@
 /* 
  * File:   LuaBinding.cpp
  * Author: WU Jun <quark@lihdd.net>
- * 
- * see .h file for changelog
  */
 
 #include "LuaBinding.h"
@@ -17,7 +15,7 @@
 // Lua C functions
 
 int LuaBinding::l_applySettings(lua_State* L) {
-    DEBUG_PRINT(3, "[LUABIND] l_getPhraseDatabaseLoadedCount\n");
+    DEBUG_PRINT(3, "[LUABIND] l_applySettings\n");
     LuaBinding& lb = *luaStates[L];
 
     // database confs
@@ -49,7 +47,7 @@ int LuaBinding::l_applySettings(lua_State* L) {
 
     // bools
     Configuration::useDoublePinyin = lb.getValue("use_double_pinyin", Configuration::useDoublePinyin);
-    Configuration::useDoublePinyin = lb.getValue("strict_double_pinyin", Configuration::strictDoublePinyin);
+    Configuration::strictDoublePinyin = lb.getValue("strict_double_pinyin", Configuration::strictDoublePinyin);
     Configuration::startInEngMode = lb.getValue("start_in_eng_mode", Configuration::startInEngMode);
     Configuration::writeRequestCache = lb.getValue("cache_requests", Configuration::writeRequestCache);
 
@@ -60,6 +58,53 @@ int LuaBinding::l_applySettings(lua_State* L) {
     // external script path
     Configuration::fetcherPath = string(lb.getValue("fetcher_path", Configuration::fetcherPath.c_str()));
     Configuration::fetcherBufferSize = lb.getValue("fetcher_buffer_size", Configuration::fetcherBufferSize);
+
+    // punc map
+    if (lb.getValueType("punc_map") == LUA_TTABLE) {
+        DEBUG_PRINT(4, "[LUABIND] read punc_map\n");
+        Configuration::punctuationMap.clear();
+        // IMPROVE: some lock here?
+        int pushedCount = lb.reachValue("punc_map");
+        for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
+            // key is at index -2 and value is at index -1
+            // key should be a string or a number
+
+            int key = 0;
+            switch (lua_type(L, -2)) {
+                case LUA_TNUMBER: 
+                    key = lua_tointeger(L, -2);
+                    break;
+                case LUA_TSTRING:
+                    key = lua_tostring(L, -2)[0];
+                    break;
+                default:
+                    luaL_checktype(L, -2, LUA_TSTRING);
+            }
+
+            Configuration::FullPunctuation fpunc;
+            switch (lua_type(L, -1)) {
+                case LUA_TSTRING:
+                    // single punc
+                    DEBUG_PRINT(4, "[LUABIND] single punc: %s\n", lua_tostring(L, -1));
+                    fpunc.addPunctuation(lua_tostring(L, -1));
+                    break;
+                case LUA_TTABLE:
+                    // multi puncs
+                    DEBUG_PRINT(4, "[LUABIND] multi punc\n");
+                    for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
+                        // value should be string
+                        luaL_checktype(L, -1, LUA_TSTRING);
+                        DEBUG_PRINT(5, "[LUABIND]   punc: %s\n", lua_tostring(L, -1));
+                        fpunc.addPunctuation(lua_tostring(L, -1));
+                    }
+                    // after the loop, the key and value of inner table are all popped
+                    break;
+            }
+
+            Configuration::punctuationMap.setPunctuationPair(key, fpunc);
+        }
+        lua_pop(L, pushedCount);
+    }
 
     return 0;
 }
@@ -280,7 +325,7 @@ const struct luaL_Reg LuaBinding::luaLibraryReg[] = {
     //{"bitxor", LuaBinding::l_bitxor},
     //{"bitor", LuaBinding::l_bitor},
     //{"keymask", LuaBinding::l_keymask},
-    // {"printStack", LuaBinding::l_printStack},
+    //{"printStack", LuaBinding::l_printStack},
     {"chars_to_pinyin", LuaBinding::l_charsToPinyin},
     {"set_debug_level", LuaBinding::l_setDebugLevel},
     {"load_database", LuaBinding::l_loadPhraseDatabase},
@@ -293,7 +338,10 @@ const struct luaL_Reg LuaBinding::luaLibraryReg[] = {
 
 map<const lua_State*, LuaBinding*> LuaBinding::luaStates;
 DoublePinyinScheme LuaBinding::doublePinyinScheme;
-char LuaBinding::LIB_NAME[] = "ime";
+
+const char LuaBinding::LIB_NAME[] = "ime";
+const string LuaBinding::LibraryName = LuaBinding::LIB_NAME;
+
 map<string, PinyinDatabase*> LuaBinding::pinyinDatabases;
 
 LuaBinding::LuaBinding() {
@@ -325,7 +373,7 @@ LuaBinding::LuaBinding() {
     setValue("USERDATADIR", ((string) (g_get_user_data_dir()) + G_DIR_SEPARATOR_S "ibus" G_DIR_SEPARATOR_S "sogoupycc").c_str());
     setValue("DIRSEPARATOR", G_DIR_SEPARATOR_S);
 
-    Configuration::addConstants(*this);
+    Configuration::addConstantsToLua(*this);
 
     // insert into static map, let lib function be able to lookup this class
     // L - this one-to-one relation. (Now it takes O(logN) to lookup 'this'
@@ -338,7 +386,7 @@ void LuaBinding::staticInit() {
     // doublePinyinScheme, pinyinDatabases, etc
     staticLuaBinding = new LuaBinding();
     staticLuaBinding->doString("dofile('" PKGDATADIR G_DIR_SEPARATOR_S "config.lua')");
-    
+
     l_applySettings(staticLuaBinding->L);
 }
 
@@ -375,19 +423,6 @@ int LuaBinding::doString(const char* luaScript) {
     return r;
 }
 
-/**
- * call a lua function in LIB_NAME table
- * ... : in_1, in_2, &out_1, &out_2, ...
- * note here, std::string in output, but const char* in input
- * sig format examples:
- * "dd>s"
- * take in 2 ints, fills a std::string
- * "s"
- * take in 1 string(char[]), no return values
- * d: int, f: double, s: string, b: boolean(int)
- * return -1 if function is nil, 0 if successful, otherwise same as lua_pcall
- * do not use in multi-threads
- */
 int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ...) {
     DEBUG_PRINT(2, "[LUABIND] callLua: %s (%s)\n", funcName, sig);
 
@@ -398,20 +433,16 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
 
     assert(lua_gettop(L) == 0);
     lua_State * state = L;
+
     pthread_mutex_lock(&luaStateMutex);
-
-    DEBUG_PRINT(3, "[LUABIND.CALLLUA] Stack size at the beginning: %d\n", lua_gettop(state));
-
     lua_checkstack(state, strlen(sig) + 2);
-
-    lua_getglobal(state, LIB_NAME);
-    lua_getfield(state, -1, funcName); // stack: 2 elements
+    int pushedCount = reachValue(funcName, "_G");
+    printf("count:%d\n", pushedCount);
 
 
     if (lua_isnil(state, -1)) {
         // function not found, here just ignore and skip.
         ret = -1;
-        lua_pop(state, 2); // pop nil and libname
         goto aborting;
     }
 
@@ -429,18 +460,18 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
         }
     }
 
-
+    // lua_pcall will remove paras and function
+    pushedCount--;
     nres = strlen(sig);
     // since we use recursive mutex here, no unlock needed
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Params pushed\n");
     if ((ret = lua_pcall(state, narg, nres, 0)) != 0) {
         fprintf(stderr, "error calling lua function '%s.%s': %s.\nprogram is likely to crash soon\n", LIB_NAME, funcName, lua_tostring(state, -1));
-        lua_pop(state, 2); // pop err string and libname
+        pushedCount++;
+        // report error early.
+        goto aborting;
     }
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Pcall finished\n");
-
-    // report error early.
-    if (ret != 0) goto aborting;
 
     for (int pres = -nres; *sig; ++pres, ++sig) {
         switch (*sig) {
@@ -467,11 +498,12 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
     }
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Cleaning\n");
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Stack size: %d, result count: %d\n", lua_gettop(state), nres);
-    lua_pop(state, nres + 1); // pop ret values and lib name
 
 aborting:
     // pop values before enter here
+    lua_pop(state, pushedCount);
     pthread_mutex_unlock(&luaStateMutex);
+    va_end(vl);
 
     //assert(lua_gettop(L) == 0);
     return ret;
@@ -490,19 +522,50 @@ void LuaBinding::addFunction(const lua_CFunction func, const char * funcName) {
     pthread_mutex_unlock(&luaStateMutex);
 }
 
+int LuaBinding::reachValue(const char* varName, const char* libName) {
+    DEBUG_PRINT(5, "[LUABIND] reachValue: %s.%s\n", libName, varName);
+    // internal use, lock before call this
+    vector<string> names = splitString(varName, '.');
+
+    int pushedCount = 1;
+    lua_checkstack(L, 1 + names.size());
+    lua_getglobal(L, libName);
+
+    bool nextIsNumber = false;
+    for (size_t i = 0; i < names.size(); i++) {
+        string& name = names[i];
+
+        if (name.empty()) {
+            nextIsNumber = true;
+            continue;
+        }
+        if (!lua_istable(L, -1)) {
+            DEBUG_PRINT(6, "[LUABIND] Not a table, stop\n");
+            // stop here
+            break;
+        }
+        if (nextIsNumber) {
+            int id;
+            DEBUG_PRINT(6, "[LUABIND] number: %s\n", name.c_str());
+            sscanf(name.c_str(), "%d", &id);
+            lua_pushnumber(L, id);
+        } else {
+            DEBUG_PRINT(6, "[LUABIND] string: %s\n", name.c_str());
+            lua_pushstring(L, name.c_str());
+        }
+        pushedCount++;
+        lua_gettable(L, -2);
+    }
+    return pushedCount;
+}
+
 bool LuaBinding::getValue(const char* varName, const bool defaultValue, const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] getValue(boolean): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
-    lua_checkstack(L, 2);
-    lua_getglobal(L, libName);
     bool r = defaultValue;
-    if (lua_istable(L, -1)) {
-        lua_getfield(L, -1, varName);
-        if (lua_isboolean(L, -1)) r = lua_toboolean(L, -1);
-        lua_pop(L, 2);
-    } else {
-        lua_pop(L, 1);
-    }
+    int pushedCount = reachValue(varName, libName);
+    if (lua_isboolean(L, -1)) r = lua_toboolean(L, -1);
+    lua_pop(L, pushedCount);
     pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
@@ -510,16 +573,10 @@ bool LuaBinding::getValue(const char* varName, const bool defaultValue, const ch
 string LuaBinding::getValue(const char* varName, const char* defaultValue, const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] getValue(string): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
-    lua_checkstack(L, 2);
-    lua_getglobal(L, libName);
     string r = defaultValue;
-    if (lua_istable(L, -1)) {
-        lua_getfield(L, -1, varName);
-        if (lua_isstring(L, -1)) r = lua_tostring(L, -1);
-        lua_pop(L, 2);
-    } else {
-        lua_pop(L, 1);
-    }
+    int pushedCount = reachValue(varName, libName);
+    if (lua_isstring(L, -1)) r = lua_tostring(L, -1);
+    lua_pop(L, pushedCount);
     pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
@@ -527,38 +584,36 @@ string LuaBinding::getValue(const char* varName, const char* defaultValue, const
 int LuaBinding::getValue(const char* varName, const int defaultValue, const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] getValue(int): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
-    lua_checkstack(L, 2);
-    lua_getglobal(L, libName);
     int r = defaultValue;
-    if (lua_istable(L, -1)) {
-        lua_getfield(L, -1, varName);
-        if (lua_isnumber(L, -1)) r = lua_tointeger(L, -1);
-        lua_pop(L, 2);
-    } else {
-        lua_pop(L, 1);
-    }
+    int pushedCount = reachValue(varName, libName);
+    if (lua_isnumber(L, -1)) r = lua_tointeger(L, -1);
+    lua_pop(L, pushedCount);
     pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
 
 unsigned int LuaBinding::getValue(const char* varName, const unsigned int defaultValue, const char* libName) {
-    DEBUG_PRINT(4, "[LUABIND] getValue(int): %s.%s\n", libName, varName);
+    DEBUG_PRINT(5, "[LUABIND] getValue(unsigned int): %s.%s\n", libName, varName);
     return getValue(varName, (int) defaultValue, libName);
 }
 
 double LuaBinding::getValue(const char* varName, const double defaultValue, const char* libName) {
-    DEBUG_PRINT(4, "[LUABIND] getValue(int): %s.%s\n", libName, varName);
+    DEBUG_PRINT(4, "[LUABIND] getValue(double): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
-    lua_checkstack(L, 2);
-    lua_getglobal(L, libName);
-    double r = defaultValue;
-    if (lua_istable(L, -1)) {
-        lua_getfield(L, -1, varName);
-        if (lua_isnumber(L, -1)) r = lua_tointeger(L, -1);
-        lua_pop(L, 2);
-    } else {
-        lua_pop(L, 1);
-    }
+    int r = defaultValue;
+    int pushedCount = reachValue(varName, libName);
+    if (lua_isnumber(L, -1)) r = lua_tonumber(L, -1);
+    lua_pop(L, pushedCount);
+    pthread_mutex_unlock(&luaStateMutex);
+    return r;
+}
+
+int LuaBinding::getValueType(const char* varName, const char* libName) {
+    DEBUG_PRINT(4, "[LUABIND] getValueType: %s.%s\n", libName, varName);
+    pthread_mutex_lock(&luaStateMutex);
+    int pushedCount = reachValue(varName, libName);
+    int r = lua_type(L, -1);
+    lua_pop(L, pushedCount);
     pthread_mutex_unlock(&luaStateMutex);
     return r;
 }

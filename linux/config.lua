@@ -14,9 +14,9 @@ local file = io.open(user_fetcher, 'r')
 if file then file:close() ime.fetcher = user_fetcher end
 
 -- 如果存在，则加载用户配置文件
-local user_config = ime.USERCONFIGDIR..'/config'
+local user_config = ime.USERCONFIGDIR..'/config.lua'
 local file = io.open(user_config, 'r')
-if file then file:close() dofile(user_config) end
+if file then file:close() dofile(user_config) ime.apply_settings() end
 
 -- 加载 ime.PKGDATADIR .. '/db' 和 ime.USERDATADIR .. '/db' 下所有 .db 文件
 if not do_not_load_database then

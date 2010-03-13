@@ -2,9 +2,11 @@
  * File:   LuaBinding.cpp
  * Author: WU Jun <quark@lihdd.net>
  *
+ * March 13, 2010
+ *  add PunctuationMap, ImeKey
  * March 12, 2010
  *  created. aim to maintain global configuration.
- *  and move non-status session config global
+ *  and move all non-status session config global
  */
 
 #ifndef _CONFIGURATION_H
@@ -20,6 +22,43 @@ using std::set;
 #define INVALID_COLOR -1
 
 namespace Configuration {
+    // class defines, should be in front
+
+    class FullPunctuation {
+    public:
+        FullPunctuation();
+        FullPunctuation(const string punction);
+        /**
+         * Punctuation(2, "(", ")"), etc...
+         */
+        FullPunctuation(size_t count, ...);
+        FullPunctuation(const FullPunctuation& punction);
+        void addPunctuation(const string punction);
+        const string getPunctuation();
+    private:
+        vector<string> punctions;
+        size_t index;
+    };
+
+    class PunctuationMap {
+    public:
+        PunctuationMap();
+        PunctuationMap(const PunctuationMap& orig);
+        void setPunctuationPair(unsigned int key, FullPunctuation punctuation);
+        const string getFullPunctuation(const unsigned int punctionKey) const;
+        void clear();
+    private:
+        mutable map<const unsigned int, FullPunctuation> punctuationMap;
+    };
+
+    class ImeKey {
+    public:
+        ImeKey(LuaBinding& L, const string& varName);
+        ImeKey(const unsigned int keyval);
+    private:
+        std::set<unsigned int> keys;
+    };
+
     // full path of fetcher script
     extern string fetcherPath;
 
@@ -52,13 +91,16 @@ namespace Configuration {
     extern string dbOrder;
     extern double dbLongPhraseAdjust;
 
-    void addConstants(LuaBinding& luaBinding);
+    // half to full width punctuation map
+    extern PunctuationMap punctuationMap;
+
+    // functions (callby LuaBinding, main)
+    void addConstantsToLua(LuaBinding& luaBinding);
+    void staticInit();
+
 };
 
-class ImeKey {
-private:
-    std::set<unsigned int> keys;
-};
+
 
 #endif	/* _CONFIGURATION_H */
 

@@ -1,8 +1,6 @@
 /*
  * File:   engine.cpp
  * Author: WU Jun <quark@lihdd.net>
- *
- * see .h file for changelog
  */
 
 #include <stdio.h>
@@ -20,6 +18,8 @@ typedef struct _IBusSgpyccEngine IBusSgpyccEngine;
 typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
 
 using std::string;
+using Configuration::PunctuationMap;
+using Configuration::ImeKey;
 
 struct _IBusSgpyccEngine {
     IBusEngine parent;
@@ -54,16 +54,19 @@ struct _IBusSgpyccEngine {
     pthread_mutex_t engineMutex;
 
     // lua binding
-    // complicated data stored in lua state: puncMap
+    // now it is indeed global
     LuaBinding* luaBinding;
 
-    // multi-thread begins here
+    // cloud client, handle multi-thread requests
     PinyinCloudClient* cloudClient;
 
     // prop list
     IBusPropList *propList;
     IBusProperty *engModeProp;
     IBusProperty *requestingProp;
+
+    // punc map (have states, should store here)
+    PunctuationMap *punctuationMap;
 };
 
 struct _IBusSgpyccEngineClass {
@@ -209,8 +212,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
         g_object_unref(text);
     }
 
-    // punctuation map is stored in lua state, since it is complicated, do not store it here
-
+    // punctuation map
+    engine->punctuationMap = new PunctuationMap(Configuration::punctuationMap);
 
     // properties
     engine->propList = ibus_prop_list_new();
@@ -236,6 +239,9 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     delete engine->commitedConvertingCharacters;
     delete engine->commitedConvertingPinyins;
 
+    // delete other things
+    delete engine->punctuationMap;
+
     // unref g objects
 #define DELETE_G_OBJECT(x) if(x != NULL) g_object_unref(x), x = NULL;
     DELETE_G_OBJECT(engine->table);
@@ -244,7 +250,6 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
 #undef DELETE_G_OBJECT
     IBUS_OBJECT_CLASS(parentClass)->destroy((IBusObject *) engine);
 }
-
 
 // ibus_lookup_table_get_number_of_candidates() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
 // use these inline functions as alternative
@@ -598,10 +603,10 @@ engineProcessKeyEventStart:
 
                 if (!handled) {
                     // check punctuation
-                    string punctuation = "";
-                    engine->luaBinding->callLuaFunction("_get_punc", "s>s", keychrs.c_str(), &punctuation);
-                    if (punctuation.length() > 0) {
-                        // registered punctuation
+                    // todo: move to configuration
+                    string punctuation = engine->punctuationMap->getFullPunctuation(keyval);
+                    if (!punctuation.empty()) {
+                        // found mapped punctuation
                         if (engine->preedit->length() > 0) {
                             engine->requesting = true;
                             engineUpdateProperties(engine);
@@ -673,7 +678,6 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
     if (engine->requesting) {
         ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/requesting.png");
     } else {
-
         ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/idle.png");
     }
     ibus_engine_register_properties((IBusEngine*) engine, engine->propList);
@@ -707,7 +711,7 @@ static void engineDisable(IBusSgpyccEngine * engine) {
 
 static void engineSetCursorLocation(IBusSgpyccEngine *engine, gint x, gint y, gint w, gint h) {
 
-    DEBUG_PRINT(4, "[ENGINE] SetCursorLocation(%d, %d, %d, %d)\n", x, y, w, h);
+    DEBUG_PRINT(7, "[ENGINE] SetCursorLocation(%d, %d, %d, %d)\n", x, y, w, h);
     engine->cursorArea.height = h;
     engine->cursorArea.width = w;
     engine->cursorArea.x = x;
@@ -727,7 +731,6 @@ static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
 static void enginePageUp(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] PageUp\n");
     if (engine->correctingPinyins->length() > 0) {
-
         if (ibus_lookup_table_page_up(engine->table)) engine->tablePageNumber--;
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
