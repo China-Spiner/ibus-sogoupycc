@@ -25,10 +25,9 @@ namespace Configuration {
     int correctingBackColor = 0xEDBE7D, correctingForeColor = INVALID_COLOR;
 
     // keys
-    unsigned int engModeToggleKey = IBUS_Shift_L,
-            startCorrectionKey = IBUS_Tab,
-            engModeKey = IBUS_VoidSymbol,
-            chsModeKey = IBUS_VoidSymbol,
+    ImeKey startCorrectionKey = IBUS_Tab,
+            engModeKey = IBUS_Shift_L,
+            chsModeKey = IBUS_Shift_L,
             pageDownKey = 'h',
             pageUpKey = 'g';
 
@@ -111,16 +110,66 @@ namespace Configuration {
         punctuationMap.clear();
     }
 
-    ImeKey::ImeKey(LuaBinding& L, const string& varName) {
+    const string ImeKey::getLabel() const {
+        return label;
+    }
 
-        //lua_checkstack(L, 1);
-        //lua_getglobal(L, "_G");
-        //for (char* name = va_arg(vl, char*); name; name = va_arg(vl, char*)) {
-
+    void ImeKey::readFromLua(LuaBinding& luaBinding, const string& varName) {
+        switch (luaBinding.getValueType(varName.c_str())) {
+            case LUA_TTABLE:
+            {
+                keys.clear();
+                // multi keys
+                char buffer[128];
+                label = luaBinding.getValue((varName + ".label").c_str(), "");
+                for (size_t index = 1;; index++) {
+                    snprintf(buffer, sizeof (buffer), "%s..%u", varName.c_str(), index);
+                    unsigned int key = IBUS_VoidSymbol;
+                    switch (luaBinding.getValueType(buffer)) {
+                        case LUA_TSTRING:
+                            key = luaBinding.getValue(buffer, " ")[0];
+                            break;
+                        case LUA_TNUMBER:
+                            key = luaBinding.getValue(buffer, IBUS_VoidSymbol);
+                    }
+                    DEBUG_PRINT(5, "[CONF] Multi hot key - got: 0x%x\n", key);
+                    if (key != IBUS_VoidSymbol) {
+                        keys.insert(key);
+                        if (keys.size() == 1 && label.empty()) label = string("") + (char) key;
+                    } else break;
+                }
+                DEBUG_PRINT(4, "[CONF] Multi hot key %s - size: %d\n", label.c_str(), keys.size());
+                break;
+            }
+            case LUA_TNUMBER:
+            {
+                keys.clear();
+                unsigned key = luaBinding.getValue(varName.c_str(), (unsigned int) IBUS_VoidSymbol);
+                keys.insert(key);
+                label = string("") + (char) key;
+                break;
+            }
+            case LUA_TSTRING:
+            {
+                keys.clear();
+                unsigned key = luaBinding.getValue(varName.c_str(), "\f")[0];
+                keys.insert(key);
+                label = string("") + (char) key;
+                break;
+            }
+            default:
+                // do nothing, keep current value
+                break;
+        }
     }
 
     ImeKey::ImeKey(const unsigned int keyval) {
         keys.insert(keyval);
+        label = string("") + (char) keyval;
+    }
+
+    const bool ImeKey::match(const unsigned int keyval) const {
+        return (keys.count(keyval) > 0);
     }
 
     // functions
@@ -151,14 +200,11 @@ namespace Configuration {
         Configuration::punctuationMap.setPunctuationPair('\\', FullPunctuation("、"));
         Configuration::punctuationMap.setPunctuationPair('\'', FullPunctuation(2, "‘", "’"));
         Configuration::punctuationMap.setPunctuationPair('\"', FullPunctuation(2, "“", "”"));
-
-        // create request_cache
-        
     }
 
     void addConstantsToLua(LuaBinding& luaBinding) {
         // add variables to lua
-        luaBinding.doString("key={}");
+        luaBinding.doString("key={} request_cache={}");
 #define add_key_const(var) luaBinding.setValue(#var, IBUS_ ## var, "key");
         /*
         add_key_const(CONTROL_MASK);
@@ -192,6 +238,8 @@ namespace Configuration {
         add_key_const(BackSpace);
         add_key_const(Escape);
         add_key_const(Delete);
+        add_key_const(Page_Down);
+        add_key_const(Page_Up);
 #undef add_key_const
         luaBinding.setValue("None", IBUS_VoidSymbol, "key");
 

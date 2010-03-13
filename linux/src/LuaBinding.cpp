@@ -38,12 +38,11 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::selectionTimout = (long long) lb.getValue("sel_timeout", (double) Configuration::selectionTimout / XUtility::MICROSECOND_PER_SECOND) * XUtility::MICROSECOND_PER_SECOND;
 
     // keys
-    Configuration::engModeToggleKey = lb.getValue("eng_mode_toggle_key", Configuration::engModeToggleKey);
-    Configuration::engModeKey = lb.getValue("eng_mode_key", Configuration::engModeKey);
-    Configuration::chsModeKey = lb.getValue("chs_mode_key", Configuration::chsModeKey);
-    Configuration::startCorrectionKey = lb.getValue("correction_mode_key", Configuration::startCorrectionKey);
-    Configuration::pageDownKey = lb.getValue("page_down_key", Configuration::pageDownKey);
-    Configuration::pageUpKey = lb.getValue("page_up_key", Configuration::pageUpKey);
+    Configuration::engModeKey.readFromLua(lb, "eng_mode_key");
+    Configuration::chsModeKey.readFromLua(lb, "chs_mode_key");
+    Configuration::startCorrectionKey.readFromLua(lb, "correction_mode_key");
+    Configuration::pageDownKey.readFromLua(lb, "page_down_key");
+    Configuration::pageUpKey.readFromLua(lb, "page_up_key");
 
     // bools
     Configuration::useDoublePinyin = lb.getValue("use_double_pinyin", Configuration::useDoublePinyin);
@@ -71,7 +70,7 @@ int LuaBinding::l_applySettings(lua_State* L) {
 
             int key = 0;
             switch (lua_type(L, -2)) {
-                case LUA_TNUMBER: 
+                case LUA_TNUMBER:
                     key = lua_tointeger(L, -2);
                     break;
                 case LUA_TSTRING:
@@ -556,6 +555,7 @@ int LuaBinding::reachValue(const char* varName, const char* libName) {
         pushedCount++;
         lua_gettable(L, -2);
     }
+
     return pushedCount;
 }
 
@@ -615,46 +615,50 @@ int LuaBinding::getValueType(const char* varName, const char* libName) {
     int r = lua_type(L, -1);
     lua_pop(L, pushedCount);
     pthread_mutex_unlock(&luaStateMutex);
+    DEBUG_PRINT(5, "[LUABIND] getValueType: return %s\n", r == LUA_TSTRING ? "STRING" : (r == LUA_TNIL ? "NIL" : (r == LUA_TNUMBER ? "NUMBER" : (r == LUA_TTABLE ? "TABLE" : "<OTHER>"))));
     return r;
 }
 
 void LuaBinding::setValue(const char* varName, const int value, const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] setValue(int): %s.%s = %d\n", libName, varName, value);
-    pthread_mutex_lock(&luaStateMutex);
-    lua_checkstack(L, 2);
-    lua_getglobal(L, libName);
+            pthread_mutex_lock(&luaStateMutex);
+            lua_checkstack(L, 2);
+            lua_getglobal(L, libName);
     if (lua_istable(L, -1)) {
+
         lua_pushinteger(L, value);
-        lua_setfield(L, -2, varName); //it will pop value
+                lua_setfield(L, -2, varName); //it will pop value
     }
     lua_pop(L, 1);
-    pthread_mutex_unlock(&luaStateMutex);
+            pthread_mutex_unlock(&luaStateMutex);
 }
 
 void LuaBinding::setValue(const char* varName, const char value[], const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] setValue(string): %s.%s = '%s'\n", libName, varName, value);
-    pthread_mutex_lock(&luaStateMutex);
-    lua_checkstack(L, 2);
-    lua_getglobal(L, libName);
+            pthread_mutex_lock(&luaStateMutex);
+            lua_checkstack(L, 2);
+            lua_getglobal(L, libName);
     if (lua_istable(L, -1)) {
+
         lua_pushstring(L, value);
-        lua_setfield(L, -2, varName); //it will pop value
+                lua_setfield(L, -2, varName); //it will pop value
     }
     lua_pop(L, 1);
-    pthread_mutex_unlock(&luaStateMutex);
+            pthread_mutex_unlock(&luaStateMutex);
 }
 
 void LuaBinding::setValue(const char* varName, const bool value, const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] setValue(boolean): %s.%s = %s\n", libName, varName, value ? "true" : "false");
-    pthread_mutex_lock(&luaStateMutex);
-    lua_checkstack(L, 2);
-    lua_getglobal(L, libName);
+            pthread_mutex_lock(&luaStateMutex);
+            lua_checkstack(L, 2);
+            lua_getglobal(L, libName);
     if (lua_istable(L, -1)) {
+
         lua_pushboolean(L, value);
-        lua_setfield(L, -2, varName); //it will pop value
+                lua_setfield(L, -2, varName); //it will pop value
     }
     lua_pop(L, 1);
-    pthread_mutex_unlock(&luaStateMutex);
+            pthread_mutex_unlock(&luaStateMutex);
 }
 
 /**
@@ -665,14 +669,15 @@ LuaBinding::LuaBinding(const LuaBinding& orig) {
 }
 
 LuaBinding::~LuaBinding() {
+
     DEBUG_PRINT(1, "[LUABIND] Destroy\n");
-    luaStates.erase(L);
-    lua_close(L);
-    pthread_mutex_destroy(&luaStateMutex);
+            luaStates.erase(L);
+            lua_close(L);
+            pthread_mutex_destroy(&luaStateMutex);
 }
 
 LuaBinding* LuaBinding::staticLuaBinding = NULL;
 
-LuaBinding& LuaBinding::getStaticBinding() {
+        LuaBinding& LuaBinding::getStaticBinding() {
     return *staticLuaBinding;
 }

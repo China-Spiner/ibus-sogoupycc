@@ -309,10 +309,10 @@ engineProcessKeyEventStart:
         assert(PinyinUtility::isValidPartialPinyin(pinyin));
         if ((state & IBUS_RELEASE_MASK) == IBUS_RELEASE_MASK) {
             res = engine->lastProcessKeyResult;
-        } else if (keyval == Configuration::pageDownKey) {
+        } else if (Configuration::pageDownKey.match(keyval)) {
             enginePageDown(engine);
             res = TRUE;
-        } else if (keyval == Configuration::pageUpKey) {
+        } else if (Configuration::pageUpKey.match(keyval)) {
             enginePageUp(engine);
             res = TRUE;
         } else if (keyval == IBUS_Delete) {
@@ -486,7 +486,7 @@ engineProcessKeyEventStart:
             // normally do not handle release event, but watch for eng mode toggling
             if ((state & IBUS_RELEASE_MASK) == IBUS_RELEASE_MASK && engine->lastKeyval == keyval) {
                 bool engModeChanged = false;
-                if ((keyval == Configuration::engModeToggleKey) || (engine->engMode && keyval == Configuration::chsModeKey) || (!engine->engMode && keyval == Configuration::engModeKey)) {
+                if ((engine->engMode && Configuration::chsModeKey.match(keyval)) || (!engine->engMode && Configuration::engModeKey.match(keyval))) {
                     engine->engMode = !engine->engMode;
                     engModeChanged = true;
                 }
@@ -500,7 +500,7 @@ engineProcessKeyEventStart:
                     break;
                 }
                 res = engine->lastProcessKeyResult;
-                break;
+                break; // break the while
             }
             engine->lastKeyval = keyval;
 
@@ -524,7 +524,7 @@ engineProcessKeyEventStart:
 
             // in chinese mode ?
             if (!engine->engMode) {
-                if (keyval == Configuration::startCorrectionKey) {
+                if (Configuration::startCorrectionKey.match(keyval)) {
                     // switch to editing mode
                     if (!engine->preedit->empty()) {
                         // edit active preedit

@@ -53,10 +53,13 @@ namespace Configuration {
 
     class ImeKey {
     public:
-        ImeKey(LuaBinding& L, const string& varName);
         ImeKey(const unsigned int keyval);
+        void readFromLua(LuaBinding& luaBinding, const string& varName);
+        const bool match(const unsigned int keyval) const;
+        const string getLabel() const;
     private:
         std::set<unsigned int> keys;
+        string label;
     };
 
     // full path of fetcher script
@@ -75,7 +78,7 @@ namespace Configuration {
     extern int correctingForeColor, correctingBackColor;
 
     // keys
-    extern unsigned int engModeToggleKey, startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey;
+    extern ImeKey startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey;
 
     // boolean configs
     extern bool useDoublePinyin;
