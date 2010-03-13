@@ -276,7 +276,6 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
     DEBUG_PRINT(1, "[ENGINE] ProcessKeyEvent(%d, %d, 0x%x)\n", keyval, keycode, state);
 
     ENGINE_MUTEX_LOCK;
-
     gboolean res = FALSE;
 
 engineProcessKeyEventStart:
@@ -346,7 +345,7 @@ engineProcessKeyEventStart:
         } else {
             // test if user press a key that in lookup table
             size_t pos = string::npos;
-            for (size_t i = 0; i < engine->lookupTableLabelCount; ++i){
+            for (size_t i = 0; i < engine->lookupTableLabelCount; ++i) {
                 if (Configuration::tableLabelKeys[i].match(keyval)) {
                     pos = i;
                     break;
@@ -538,6 +537,8 @@ engineProcessKeyEventStart:
 
             // in chinese mode ?
             if (!engine->engMode) {
+                // used by not strict double pinyin mode
+                bool fallbackToFullPinyin = false;
                 if (Configuration::startCorrectionKey.match(keyval)) {
                     // switch to editing mode
                     if (!engine->preedit->empty()) {
@@ -587,12 +588,12 @@ engineProcessKeyEventStart:
                         }
                     }
                 } else if (keyval == IBUS_Escape) {
-                    if (engine->preedit->length() > 0) {
+                    if (!engine->preedit->empty()) {
                         *engine->preedit = "";
                         handled = true;
                     }
                 } else if (keyval == IBUS_space) {
-                    if (engine->preedit->length() > 0) {
+                    if (!engine->preedit->empty()) {
                         // eat this space if we are going to commit preedit
                         keyval = 0;
                         keychrs = "";
@@ -605,10 +606,13 @@ engineProcessKeyEventStart:
                             if (LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit + keychr)) {
                                 *engine->preedit += keychr;
                                 handled = true;
+                            } else {
+                                if (!Configuration::strictDoublePinyin) fallbackToFullPinyin = true;
                             }
                         }
                         if (keyval >= IBUS_a && keyval <= IBUS_z) handled = true;
-                    } else if ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0)) {
+                    }
+                    if ((fallbackToFullPinyin || !Configuration::useDoublePinyin) && ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0))) {
                         if (keyval == '\'') keychr = ' ';
                         *engine->preedit += keychr;
                         handled = true;
@@ -633,7 +637,8 @@ engineProcessKeyEventStart:
                 }
 
                 // update active preedit
-                if (Configuration::useDoublePinyin) {
+                if (!LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit)) fallbackToFullPinyin = true;
+                if (Configuration::useDoublePinyin && fallbackToFullPinyin == false) {
                     *engine->activePreedit = LuaBinding::doublePinyinScheme.query(*engine->preedit);
                 } else {
                     *engine->activePreedit = PinyinUtility::separatePinyins(*engine->preedit);
