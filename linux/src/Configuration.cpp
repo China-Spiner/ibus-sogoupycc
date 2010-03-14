@@ -47,7 +47,7 @@ namespace Configuration {
     size_t multiToneLimit = 2;
 
     // database confs
-    int dbResultLimit = 32, dbLengthLimit = 5;
+    int dbResultLimit = 128, dbLengthLimit = 10;
     string dbOrder = "";
     double dbLongPhraseAdjust = 1.2;
 

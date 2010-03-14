@@ -67,25 +67,33 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
 
 void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candidateList, const int countLimit, const double longPhraseAdjust, const int lengthLimit) {
     DEBUG_PRINT(3, "[PYDB] query: %s\n", pinyins.toString().c_str());
-
     if (!db) return;
 
     string queryWhere;
-    char idString[12], whereBuffer[128], limitBuffer[32];
+    char idString[12], whereBuffer[1024], limitBuffer[32], weightBuffer[32];
     int lengthMax = lengthLimit;
 
     if (lengthMax < 0) lengthMax = 1;
     if (lengthMax > PINYIN_DB_ID_MAX) lengthMax = PINYIN_DB_ID_MAX;
 
-
+    /**
+     * sql sample:
+     * SELECT  phrase, freqadj FROM (
+     *   SELECT phrase, freq* 1 AS freqadj FROM main.py_phrase_0 WHERE s0=4 AND y0=29 UNION ALL
+     *   SELECT phrase, freq * 2.33 AS freqadj FROM main.py_phrase_1 WHERE s0=4 AND y0=29 AND s1=4 AND y1=28
+     * ) GROUP BY phrase ORDER BY freqadj DESC LIMIT 30
+     */
+    string query = "SELECT phrase, freqadj FROM (";
+    // build query statement
     for (size_t id = 0; id < pinyins.size(); ++id) {
         // "chuang qian ming yue guang"
         //        ^    ^
         //  lastPos  pos
         if ((int) id > lengthMax) break;
-        string pinyin = pinyins[id];
 
+        string pinyin = pinyins[id];
         snprintf(idString, sizeof (idString), "%d", id);
+        snprintf(weightBuffer, sizeof (weightBuffer), "%.4lf", pow(id + 1, longPhraseAdjust) * weight);
 
         DEBUG_PRINT(5, "[PYDB] for length = %d, pinyin = %s\n", id + 1, pinyin.c_str());
 
@@ -95,13 +103,6 @@ void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candida
         // consonant not available, stop here
         if (cid == PinyinDefines::PINYIN_ID_VOID) break;
 
-        // build query and quey
-        if (countLimit > 0) {
-            snprintf(limitBuffer, sizeof (limitBuffer), " LIMIT %d", countLimit);
-        } else {
-            limitBuffer[0] = '\0';
-        }
-
         // vowel not available, only use consonant
         if (vid == PinyinDefines::PINYIN_ID_VOID) {
             snprintf(whereBuffer, sizeof (whereBuffer), "s%d=%d", id, cid);
@@ -109,58 +110,67 @@ void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candida
             snprintf(whereBuffer, sizeof (whereBuffer), "s%d=%d AND y%d=%d", id, cid, id, vid);
         }
 
+        // update WHERE sent.
         if (!queryWhere.empty()) queryWhere += " AND ";
         queryWhere += whereBuffer;
 
-        string query = "SELECT phrase, freq FROM main.py_phrase_";
-        query += idString;
-        query += " WHERE ";
-        query += queryWhere + " GROUP BY phrase ORDER BY freq DESC " + limitBuffer;
+        // update query
+        if (id > 0) query += " UNION ALL ";
+        query += string("SELECT phrase, freq * ") + weightBuffer +
+                " AS freqadj FROM main.py_phrase_" + idString + " WHERE " + queryWhere;
+    }
 
-        DEBUG_PRINT(5, "[PYDB] query SQL: %s\n", query.c_str());
+    // build query
+    if (countLimit > 0) {
+        snprintf(limitBuffer, sizeof (limitBuffer), " LIMIT %d", countLimit);
+    } else {
+        limitBuffer[0] = '\0';
+    }
+    query += string(") GROUP BY phrase ORDER BY freqadj DESC") + limitBuffer;
 
-        sqlite3_stmt *stmt;
+    DEBUG_PRINT(5, "[PYDB] query SQL: %s\n", query.c_str());
 
-        if (sqlite3_prepare_v2(db, query.c_str(), query.length(), &stmt, NULL) != SQLITE_OK) break;
+    sqlite3_stmt *stmt;
 
-        for (bool running = true; running;) {
-            switch (sqlite3_step(stmt)) {
-                case SQLITE_ROW:
-                {
-                    string phase = (const char*) sqlite3_column_text(stmt, 0);
-                    double freq = sqlite3_column_double(stmt, 1) * weight * pow(id + 1, longPhraseAdjust);
-                    candidateList.insert(pair<double, string > (freq, phase));
+    if (sqlite3_prepare_v2(db, query.c_str(), query.length(), &stmt, NULL) != SQLITE_OK) return;
 
-                    // do not quit abnormally, use LIMIT in sql query
-                    // if (limitCount > 0 && ++count >= limitCount) running = false;
-                    break;
-                }
-                case SQLITE_DONE:
-                {
-                    running = false;
-                    break;
-                }
-                case SQLITE_BUSY:
-                {
-                    // sleep a short time, say, 64 ms
-                    usleep(64000);
-                }
-                case SQLITE_MISUSE:
-                {
-                    fprintf(stderr, "sqlite3_step() misused.\nthis should not happen.");
-                    running = false;
-                    break;
-                }
-                case SQLITE_ERROR: default:
-                {
-                    fprintf(stderr, "sqlite3_step() error: %s\n (ignored).\n", sqlite3_errmsg(db));
-                    running = false;
-                    break;
-                }
+    for (bool running = true; running;) {
+        switch (sqlite3_step(stmt)) {
+            case SQLITE_ROW:
+            {
+                string phase = (const char*) sqlite3_column_text(stmt, 0);
+                double freq = sqlite3_column_double(stmt, 1);
+                candidateList.insert(pair<double, string > (freq, phase));
+
+                // do not quit abnormally, use LIMIT in sql query
+                // if (limitCount > 0 && ++count >= limitCount) running = false;
+                break;
+            }
+            case SQLITE_DONE:
+            {
+                running = false;
+                break;
+            }
+            case SQLITE_BUSY:
+            {
+                // sleep a short time, say, 1 ms
+                usleep(1024);
+            }
+            case SQLITE_MISUSE:
+            {
+                fprintf(stderr, "sqlite3_step() misused.\nthis should not happen.");
+                running = false;
+                break;
+            }
+            case SQLITE_ERROR: default:
+            {
+                fprintf(stderr, "sqlite3_step() error: %s\n (ignored).\n", sqlite3_errmsg(db));
+                running = false;
+                break;
             }
         }
-        sqlite3_finalize(stmt);
     }
+    sqlite3_finalize(stmt);
 }
 
 string PinyinDatabase::getPinyinFromID(int consonantId, int vowelId) {

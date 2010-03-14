@@ -485,7 +485,8 @@ engineProcessKeyEventStart:
         }
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
 
-    } else { // (engine->convertingPinyins->length() == 0)
+    } else {
+        // not in correction mode
 
         // check *engine->commitedConverting
         if (!engine->commitedConvertingCharacters->empty()) {
