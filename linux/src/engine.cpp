@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cassert>
+#include <vector>
 
 #include "defines.h"
 #include "engine.h"
@@ -17,6 +18,7 @@
 typedef struct _IBusSgpyccEngine IBusSgpyccEngine;
 typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
 
+using std::vector;
 using std::string;
 using Configuration::PunctuationMap;
 using Configuration::ImeKey;
@@ -66,6 +68,7 @@ struct _IBusSgpyccEngine {
     IBusPropList *propList;
     IBusProperty *engModeProp;
     IBusProperty *requestingProp;
+    IBusProperty *extensionMenuProp;
 
     // punc map (have states, should store here)
     PunctuationMap *punctuationMap;
@@ -86,6 +89,10 @@ static double maximumResponseTime = .0;
 // lock defines
 #define ENGINE_MUTEX_LOCK if (pthread_mutex_lock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex lock fail.\n"), exit(EXIT_FAILURE);
 #define ENGINE_MUTEX_UNLOCK if (pthread_mutex_unlock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex unlock fail.\n"), exit(EXIT_FAILURE);
+
+// lua C function
+static int l_commitText(lua_State* L);
+static int l_sendRequest(lua_State* L);
 
 // init funcs
 static void engineClassInit(IBusSgpyccEngineClass *klass);
@@ -167,6 +174,10 @@ static void engineClassInit(IBusSgpyccEngineClass *klass) {
     engineClass->property_activate = (typeof (engineClass->property_activate)) & enginePropertyActive;
     engineClass->set_capabilities = (typeof (engineClass->set_capabilities)) & engineSetCapabilities;
     engineClass->set_cursor_location = (typeof (engineClass->set_cursor_location)) & engineSetCursorLocation;
+
+    // register Lua functions
+    LuaBinding::getStaticBinding().addFunction(l_commitText, "commit");
+    LuaBinding::getStaticBinding().addFunction(l_sendRequest, "request");
 }
 
 static void engineInit(IBusSgpyccEngine *engine) {
@@ -228,15 +239,19 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->propList = ibus_prop_list_new();
     engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    engine->extensionMenuProp = ibus_property_new("extensionMenu", PROP_TYPE_MENU, NULL, PKGDATADIR "/icons/menu.png", NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    ibus_property_set_sub_props(engine->extensionMenuProp, Configuration::extensionList);
 
+    // extension sub props    
     ibus_prop_list_append(engine->propList, engine->engModeProp);
     ibus_prop_list_append(engine->propList, engine->requestingProp);
+    ibus_prop_list_append(engine->propList, engine->extensionMenuProp);
 
     DEBUG_PRINT(1, "[ENGINE] Init completed\n");
 }
 
 static void engineDestroy(IBusSgpyccEngine *engine) {
-
+#define DELETE_G_OBJECT(x) if(x != NULL) g_object_unref(x), x = NULL;
     DEBUG_PRINT(1, "[ENGINE] Destroy\n");
     pthread_mutex_destroy(&engine->engineMutex);
 
@@ -252,10 +267,11 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     delete engine->punctuationMap;
 
     // unref g objects
-#define DELETE_G_OBJECT(x) if(x != NULL) g_object_unref(x), x = NULL;
     DELETE_G_OBJECT(engine->table);
     DELETE_G_OBJECT(engine->propList);
     DELETE_G_OBJECT(engine->engModeProp);
+    DELETE_G_OBJECT(engine->requestingProp);
+    DELETE_G_OBJECT(engine->extensionMenuProp);
 #undef DELETE_G_OBJECT
     IBUS_OBJECT_CLASS(parentClass)->destroy((IBusObject *) engine);
 }
@@ -275,6 +291,13 @@ inline static void engineClearLookupTable(IBusSgpyccEngine *engine) {
 
 static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, guint32 keycode, guint32 state) {
     DEBUG_PRINT(1, "[ENGINE] ProcessKeyEvent(%d, %d, 0x%x)\n", keyval, keycode, state);
+
+#define CONSIDER_MASKS (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_MOD4_MASK | IBUS_MOD5_MASK | IBUS_SUPER_MASK | IBUS_HYPER_MASK | IBUS_RELEASE_MASK | IBUS_META_MASK)
+    // check extension hot key first
+    if (((state & IBUS_RELEASE_MASK) == 0) && Configuration::activeExtension(keyval, state & CONSIDER_MASKS)) {
+        engine->lastKeyval = IBUS_VoidSymbol, engine->lastProcessKeyResult = TRUE;
+        return TRUE;
+    }
 
     ENGINE_MUTEX_LOCK;
     gboolean res = FALSE;
@@ -506,7 +529,7 @@ engineProcessKeyEventStart:
 
         while (res == 0) { // use while here to make 'break' available
             // ignore some masks (Issue 8, Comment #11)
-            state = state & (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_MOD4_MASK | IBUS_MOD5_MASK | IBUS_SUPER_MASK | IBUS_HYPER_MASK | IBUS_RELEASE_MASK | IBUS_META_MASK);
+            state = state & CONSIDER_MASKS;
 
             // fallback C key handler
             engine->cloudClient->readLock();
@@ -535,6 +558,7 @@ engineProcessKeyEventStart:
             engine->lastKeyval = keyval;
 
             // do not handle alt, ctrl ... event (such as Alt - F, Ctrl - T)
+            // accept SHIFT + a 'A' event.
             if (state != 0 && (state ^ IBUS_SHIFT_MASK) != 0) {
                 res = FALSE;
                 break;
@@ -696,12 +720,17 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName
         engine->engMode = !engine->engMode;
         engineUpdateProperties(engine);
     } else if (strcmp(propName, "requestingIndicator") == 0) {
-        // do smth here, such as show statistics ?
-        // show avg response time
-
+        // show avg response time ... info
         char statisticsBuffer[1024];
-        snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n已发送请求: %d 个\n失败的请求: %d 个\n云服务器平均响应时间: %.3lf 秒\n云服务器最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
+        if (totalRequestCount == 0) {
+            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n已发送请求: %d 个\n失败的请求: %d 个\n", totalRequestCount, totalFailedRequestCount);
+        } else {
+            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n已发送请求: %d 个\n失败的请求: %d 个\n平均响应时间: %.3lf 秒\n最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
+        }
         engine->cloudClient->request(statisticsBuffer, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    } else if (propName[0] == '.') {
+        // extension action
+        Configuration::activeExtension(propName + 1);
     }
 }
 
@@ -716,18 +745,20 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
     } else {
         ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/idle.png");
     }
+    ibus_property_set_sensitive(engine->extensionMenuProp, Configuration::activeEngine != NULL);
     ibus_engine_register_properties((IBusEngine*) engine, engine->propList);
 }
 
-static void engineFocusIn(IBusSgpyccEngine * engine) {
-
+static void engineFocusIn(IBusSgpyccEngine* engine) {
     DEBUG_PRINT(2, "[ENGINE] FocusIn\n");
+    Configuration::activeEngine = (typeof (Configuration::activeEngine))engine;
     engineUpdateProperties(engine);
 }
 
 static void engineFocusOut(IBusSgpyccEngine * engine) {
-
     DEBUG_PRINT(2, "[ENGINE] FocusOut\n");
+    Configuration::activeEngine = NULL;
+    engineUpdateProperties(engine);
 }
 
 static void engineReset(IBusSgpyccEngine * engine) {
@@ -916,6 +947,8 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     ENGINE_MUTEX_UNLOCK;
 }
 
+// callback by PinyinCloudClient
+
 string fetchFunc(void* data, const string & requestString) {
     IBusSgpyccEngine* engine = (typeof (engine)) data;
     DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
@@ -963,8 +996,48 @@ string fetchFunc(void* data, const string & requestString) {
 }
 
 string directFunc(void* data, const string & requestString) {
-    //IBusSgpyccEngine* engine = (typeof (engine)) data;
     DEBUG_PRINT(2, "[ENGINE] directFunc(%s)\n", requestString.c_str());
 
     return requestString;
+}
+
+struct LuaFuncData {
+    IBusSgpyccEngine *engine;
+    string luaFuncName;
+};
+
+string luaFunc(void* voidData, const string & requestString) {
+    DEBUG_PRINT(2, "[ENGINE] luaFunc(%s)\n", requestString.c_str());
+    LuaFuncData *data = (LuaFuncData*) voidData;
+    string response;
+    data->engine->luaBinding->callLuaFunction(data->luaFuncName.c_str(), "s>s", requestString.c_str(), &response);
+    delete (LuaFuncData*) data;
+    return response;
+}
+
+static int l_commitText(lua_State * L) {
+    DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
+    luaL_checkstring(L, 1);
+    IBusSgpyccEngine* engine = (IBusSgpyccEngine*)Configuration::activeEngine;
+    if (engine)
+        engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    return 0; // return 0 value to lua code
+}
+
+static int l_sendRequest(lua_State * L) {
+    DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
+    luaL_checkstring(L, 1);
+    IBusSgpyccEngine* engine = (IBusSgpyccEngine*)Configuration::activeEngine;
+    if (!engine) return 0;
+
+    engine->requesting = true;
+    if (lua_type(L, 2) == LUA_TSTRING) {
+        LuaFuncData *data = new LuaFuncData();
+        data->luaFuncName = lua_tostring(L, 2);
+        data->engine = engine;
+        engine->cloudClient->request(string(lua_tostring(L, 1)), luaFunc, (void*) data, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    } else {
+        engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    }
+    return 0; // return 0 value to lua code
 }

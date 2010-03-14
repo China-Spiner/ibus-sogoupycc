@@ -45,7 +45,7 @@ class LuaBinding {
 public:
     static const char LIB_NAME[];
     static const string LibraryName;
-    
+
     LuaBinding();
 
     /**
@@ -64,7 +64,8 @@ public:
 
     virtual ~LuaBinding();
     int doString(const char* luaScript);
-    
+
+
     /**
      * call a lua function in LIB_NAME table
      * ... : in_1, in_2, &out_1, &out_2, ...
@@ -97,6 +98,7 @@ public:
      */
     static void staticDestruct();
     static LuaBinding& getStaticBinding();
+    static LuaBinding& getLuaBinding(lua_State *L);
 private:
     LuaBinding(const LuaBinding& orig);
     pthread_mutex_t luaStateMutex;
@@ -192,6 +194,12 @@ private:
      * out: -
      */
     static int l_applySettings(lua_State* L);
+    /**
+     * get selection
+     * in: -
+     * out: string
+     */
+    static int l_getSelection(lua_State * L);
 };
 
 #endif	/* _LUAIBUSBINDING_H */

@@ -130,7 +130,6 @@ int main(int argc, char *argv[]) {
 
     // simple argc parser
     ibusRegister(argc > 1 && strstr(argv[1], "-i"));
-
     ibus_main();
 
     DEBUG_PRINT(1, "[MAIN] Exiting from ibus_main() ...\n");
@@ -138,6 +137,7 @@ int main(int argc, char *argv[]) {
     // clean up static vars
     XUtility::staticDestruct();
     LuaBinding::staticDestruct();
+    Configuration::staticDestruct();
 
     return 0;
 }

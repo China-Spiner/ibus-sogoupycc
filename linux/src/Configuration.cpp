@@ -8,7 +8,18 @@
 #include "XUtility.h"
 #include <ibus.h>
 
+// lua C function
+static int l_registerCommand(lua_State *L);
+
 namespace Configuration {
+    void* activeEngine = NULL;
+
+    // engine global extensions
+    // IMPROVE: use some lock here?
+    // note: currently single thread.
+    static vector<Extension*> extensions;
+    IBusPropList *extensionList = NULL;
+
     // full path of fetcher script
     string fetcherPath = PKGDATADIR "/fetcher";
 
@@ -167,13 +178,48 @@ namespace Configuration {
         }
     }
 
+    // ImeKey
+
     ImeKey::ImeKey(const unsigned int keyval) {
         keys.insert(keyval);
         label = string("") + (char) keyval;
     }
 
+    ImeKey::ImeKey(const ImeKey& orig) {
+        label = orig.label;
+        keys = orig.keys;
+    }
+
     const bool ImeKey::match(const unsigned int keyval) const {
+        if (keyval == 0 || keyval == IBUS_VoidSymbol) return false;
         return (keys.count(keyval) > 0);
+    }
+
+    // Extension
+
+    Extension::Extension(ImeKey key, unsigned int keymask, string label, string script) {
+        this->key = key;
+        this->keymask = keymask;
+        this->script = script;
+        this->label = label;
+        this->prop = ibus_property_new((string(".") + label).c_str(), PROP_TYPE_NORMAL, ibus_text_new_from_string(label.c_str()), NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+        ibus_prop_list_append(extensionList, this->prop);
+    }
+
+    Extension::~Extension() {
+        if (this->prop) g_object_unref(this->prop), this->prop = NULL;
+    }
+
+    const string Extension::getLabel() const {
+        return label;
+    }
+
+    void Extension::execute() const {
+        LuaBinding::getStaticBinding().doString(script.c_str());
+    }
+
+    bool Extension::matchKey(unsigned int keyval, unsigned keymask) const {
+        return (keymask == this->keymask) && this->key.match(keyval);
     }
 
     // functions
@@ -206,7 +252,7 @@ namespace Configuration {
         Configuration::punctuationMap.setPunctuationPair('\"', FullPunctuation(2, "“", "”"));
 
         // tableLabelKeys = "jkl;uiopasdf";
-        tableLabelKeys.push_back( 'j');
+        tableLabelKeys.push_back('j');
         tableLabelKeys.push_back('k');
         tableLabelKeys.push_back('l');
         tableLabelKeys.push_back(';');
@@ -218,32 +264,26 @@ namespace Configuration {
         tableLabelKeys.push_back('s');
         tableLabelKeys.push_back('d');
         tableLabelKeys.push_back('f');
+
+        extensionList = ibus_prop_list_new();
     }
 
     void addConstantsToLua(LuaBinding& luaBinding) {
         // add variables to lua
         luaBinding.doString("key={} request_cache={}");
 #define add_key_const(var) luaBinding.setValue(#var, IBUS_ ## var, "key");
-        /*
+
         add_key_const(CONTROL_MASK);
         add_key_const(SHIFT_MASK);
         add_key_const(LOCK_MASK);
         add_key_const(MOD1_MASK);
-        add_key_const(MOD2_MASK);
-        add_key_const(MOD3_MASK);
+        //add_key_const(MOD2_MASK);
+        //add_key_const(MOD3_MASK);
         add_key_const(MOD4_MASK);
-        add_key_const(BUTTON1_MASK);
-        add_key_const(BUTTON2_MASK);
-        add_key_const(BUTTON3_MASK);
-        add_key_const(BUTTON4_MASK);
-        add_key_const(HANDLED_MASK);
         add_key_const(SUPER_MASK);
-        add_key_const(HYPER_MASK);
         add_key_const(META_MASK);
-        add_key_const(RELEASE_MASK);
-        add_key_const(MODIFIER_MASK);
-        add_key_const(FORWARD_MASK);
-         */
+        //add_key_const(MODIFIER_MASK);
+
         add_key_const(Shift_L);
         add_key_const(Shift_R);
         add_key_const(Control_L);
@@ -260,9 +300,53 @@ namespace Configuration {
         add_key_const(Page_Up);
 #undef add_key_const
         luaBinding.setValue("None", IBUS_VoidSymbol, "key");
-
         // other constants
         luaBinding.setValue("COLOR_NOCHANGE", INVALID_COLOR);
+        luaBinding.addFunction(l_registerCommand, "register_command");
+    }
+
+    void staticDestruct() {
+        for (size_t i = 0; i < extensions.size(); ++i) {
+            delete extensions.at(i);
+        }
+        extensions.clear();
+        g_object_unref(extensionList);
+    }
+
+    void activeExtension(string label) {
+        for (size_t i = 0; i < extensions.size(); ++i) {
+            if (extensions.at(i)->getLabel() == label)
+                extensions.at(i)->execute();
+        }
+    }
+
+    bool activeExtension(unsigned keyval, unsigned keymask) {
+        for (size_t i = 0; i < extensions.size(); ++i) {
+            if (extensions.at(i)->matchKey(keyval, keymask)) {
+                extensions.at(i)->execute();
+                return true;
+            }
+        }
+        return false;
     }
 };
+
+/**
+ * in: (key = I..., mod = key.SHIFT_MASK, label = "blabla", script = "functionName")
+ */
+static int l_registerCommand(lua_State *L) {
+    DEBUG_PRINT(3, "[CONF] l_registerCommand\n");
+    luaL_checktype(L, 1, LUA_TNUMBER);
+    luaL_checktype(L, 2, LUA_TNUMBER);
+    luaL_checktype(L, 3, LUA_TSTRING);
+    luaL_checktype(L, 4, LUA_TSTRING);
+
+    // Extension::Extension(ImeKey key, unsigned int keymask, string script, string label)
+    Configuration::ImeKey key = lua_tointeger(L, 1);
+    unsigned int modifiers = lua_tointeger(L, 2);
+    string label = lua_tostring(L, 3);
+    string script = lua_tostring(L, 4);
+    Configuration::extensions.push_back(new Configuration::Extension(key, modifiers, label, script));
+    return 0;
+}
 

@@ -15,6 +15,7 @@
 #include "LuaBinding.h"
 #include <set>
 #include <string>
+#include <ibus.h>
 
 using std::string;
 using std::set;
@@ -22,6 +23,7 @@ using std::set;
 #define INVALID_COLOR -1
 
 namespace Configuration {
+
     // class defines, should be in front
 
     class FullPunctuation {
@@ -53,7 +55,8 @@ namespace Configuration {
 
     class ImeKey {
     public:
-        ImeKey(const unsigned int keyval);
+        ImeKey(const unsigned int keyval = IBUS_VoidSymbol);
+        ImeKey(const ImeKey& orig);
         /**
          * @return true if success
          */
@@ -64,6 +67,27 @@ namespace Configuration {
         std::set<unsigned int> keys;
         string label;
     };
+
+    extern IBusPropList *extensionList;
+
+    // struct defines
+
+    class Extension {
+    public:
+        Extension(ImeKey key, unsigned int keymask, string label, string script);
+        ~Extension();
+        const string getLabel() const;
+        void execute() const;
+        bool matchKey(unsigned int keyval, unsigned keymask) const;
+    private:
+        Extension(const Extension& orig);
+        ImeKey key;
+        unsigned int keymask;
+        string script, label;
+        IBusProperty *prop;
+    };
+    // not part of setting, but save activeEngine
+    extern void* activeEngine;
 
     // full path of fetcher script
     extern string fetcherPath;
@@ -106,7 +130,9 @@ namespace Configuration {
     // functions (callby LuaBinding, main)
     void addConstantsToLua(LuaBinding& luaBinding);
     void staticInit();
-
+    void staticDestruct();
+    void activeExtension(string label);
+    bool activeExtension(unsigned keyval, unsigned keymask);
 };
 
 

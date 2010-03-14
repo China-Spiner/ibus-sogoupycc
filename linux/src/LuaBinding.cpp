@@ -10,10 +10,17 @@
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
-#include <ibus-1.0/ibuskeysyms.h>
+#include <ibus.h>
 
 
 // Lua C functions
+
+int LuaBinding::l_getSelection(lua_State * L) {
+    DEBUG_PRINT(2, "[LUABIND] l_getSelection\n");
+    lua_checkstack(L, 1);
+    lua_pushstring(L, XUtility::getSelection().c_str());
+    return 1;
+}
 
 int LuaBinding::l_applySettings(lua_State* L) {
     DEBUG_PRINT(3, "[LUABIND] l_applySettings\n");
@@ -21,7 +28,7 @@ int LuaBinding::l_applySettings(lua_State* L) {
 
     // multi-tone chinese lookup result limit
     Configuration::multiToneLimit = lb.getValue("multi_tone_limit", Configuration::multiToneLimit);
-    
+
     // database confs
     Configuration::dbResultLimit = lb.getValue("db_result_limit", Configuration::dbResultLimit);
     Configuration::dbLengthLimit = lb.getValue("db_length_limit", Configuration::dbLengthLimit);
@@ -75,13 +82,14 @@ int LuaBinding::l_applySettings(lua_State* L) {
                     // key is at index -2 and value is at index -1
                     // key should be a string or a number
                     Configuration::ImeKey key = IBUS_VoidSymbol;
-                    if (!key.readFromLua(lb, buffer)) break; else Configuration::tableLabelKeys.push_back(key);
+                    if (!key.readFromLua(lb, buffer)) break;
+                    else Configuration::tableLabelKeys.push_back(key);
                 }
                 break;
             }
         }
     }
-    
+
     // external script path
     Configuration::fetcherPath = string(lb.getValue("fetcher_path", Configuration::fetcherPath.c_str()));
     Configuration::fetcherBufferSize = lb.getValue("fetcher_buffer_size", Configuration::fetcherBufferSize);
@@ -348,9 +356,9 @@ const struct luaL_Reg LuaBinding::luaLibraryReg[] = {
     {"set_double_pinyin_scheme", LuaBinding::l_setDoublePinyinScheme},
     {"double_to_full_pinyin", LuaBinding::l_doubleToFullPinyin},
     {"is_valid_double_pinyin", LuaBinding::l_isValidDoublePinyin},
-    //{"bitand", LuaBinding::l_bitand},
+    {"bitand", LuaBinding::l_bitand},
     //{"bitxor", LuaBinding::l_bitxor},
-    //{"bitor", LuaBinding::l_bitor},
+    {"bitor", LuaBinding::l_bitor},
     //{"keymask", LuaBinding::l_keymask},
     //{"printStack", LuaBinding::l_printStack},
     {"chars_to_pinyin", LuaBinding::l_charsToPinyin},
@@ -358,6 +366,7 @@ const struct luaL_Reg LuaBinding::luaLibraryReg[] = {
     {"load_database", LuaBinding::l_loadPhraseDatabase},
     {"database_count", LuaBinding::l_getPhraseDatabaseLoadedCount},
     {"apply_settings", LuaBinding::l_applySettings},
+    {"get_selection", LuaBinding::l_getSelection},
     {NULL, NULL}
 };
 
@@ -698,7 +707,6 @@ LuaBinding::LuaBinding(const LuaBinding& orig) {
 }
 
 LuaBinding::~LuaBinding() {
-
     DEBUG_PRINT(1, "[LUABIND] Destroy\n");
     luaStates.erase(L);
     lua_close(L);
@@ -709,4 +717,9 @@ LuaBinding* LuaBinding::staticLuaBinding = NULL;
 
 LuaBinding& LuaBinding::getStaticBinding() {
     return *staticLuaBinding;
+}
+
+LuaBinding& LuaBinding::getLuaBinding(lua_State* L) {
+    if (luaStates.find(L) == luaStates.end()) return getStaticBinding();
+    return *luaStates.find(L)->second;
 }
