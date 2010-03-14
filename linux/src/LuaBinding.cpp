@@ -265,7 +265,7 @@ int LuaBinding::l_charsToPinyin(lua_State *L) {
     pthread_mutex_lock(&lib->luaStateMutex);
     luaL_checktype(L, 1, LUA_TSTRING);
     lua_checkstack(L, 1);
-    lua_pushstring(L, PinyinUtility::charactersToPinyins(lua_tostring(L, 1)).c_str());
+    lua_pushstring(L, PinyinUtility::charactersToPinyins(lua_tostring(L, 1), 0).c_str());
     pthread_mutex_unlock(&lib->luaStateMutex);
     return 1;
 }

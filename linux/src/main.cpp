@@ -90,10 +90,10 @@ int main(int argc, char *argv[]) {
     // help
     if (argc > 1 && strstr(argv[1], "-h")) {
         printf("ibus-sogoupycc --version | --help | --debug | --ibus\n");
-        printf("\t--version\t show version\n");
-        printf("\t--help\t show this information\n");
-        printf("\t--debug\t set debug level to full at startup\n");
-        printf("\t--ibus\t launched by ibus\n");
+        printf("\t--version \tshow version\n");
+        printf("\t--help    \tshow this information\n");
+        printf("\t--debug   \tset debug level to full at startup\n");
+        printf("\t--ibus    \tlaunched by ibus\n");
         exit(EXIT_SUCCESS);
     }
 

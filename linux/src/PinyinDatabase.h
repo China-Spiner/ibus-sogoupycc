@@ -23,6 +23,8 @@
 #include <string>
 #include <map>
 
+#include "PinyinSequence.h"
+
 #define PINYIN_DB_ID_MAX 15
 
 using std::string;
@@ -36,6 +38,7 @@ typedef multimap<double, string, greater<double> > CandidateList;
 class PinyinDatabase {
 public:
     PinyinDatabase(const string dbPath, const double weight = 1.0);
+    
     /**
      * query pinyin database
      * @param pinyins space seperated pinyin sequence, e.g. "wo men kan dao le"
@@ -44,6 +47,8 @@ public:
      * @param longPhraseAdjust 0 if no adjust, positive move long phrase front, negative move short phrase front
      */
     void query(const string pinyins, CandidateList& candidateList, const int limitCount = 0, const double longPhraseAdjust = 0, const int limitLength = PINYIN_DB_ID_MAX);
+    void query(const PinyinSequence& pinyins, CandidateList& candidateList, const int limitCount = 0, const double longPhraseAdjust = 0, const int limitLength = PINYIN_DB_ID_MAX);
+
     const bool isDatabaseOpened() const;
 
     virtual ~PinyinDatabase();
@@ -57,13 +62,12 @@ public:
      * @param vowelId return vowel id, if not parsable, it is -1
      */
     static void getPinyinIDs(const string pinyin, int& consonantId, int& vowelId);
-
+    static string getPinyinFromID(int consonantId, int vowelId);
 private:
     PinyinDatabase(const PinyinDatabase& orig);
     sqlite3 *db;
     double weight;
 };
-
 
 
 // from ibus-pinyin 1.2.99.20100212/src/Types.h, partical

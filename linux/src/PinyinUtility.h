@@ -25,6 +25,7 @@
 #include <set>
 #include <map>
 #include <string>
+#include "PinyinSequence.h"
 
 using std::map;
 using std::multimap;
@@ -37,10 +38,15 @@ public:
     PinyinUtility();
     virtual ~PinyinUtility();
 
+    static const bool isRecognisedCharacter(const string& character);
     static const bool isValidPinyin(const string& pinyin);
     static const bool isValidPartialPinyin(const string& pinyin);
 
-    static const string charactersToPinyins(const string& characters, bool includeTone = false);
+    /**
+     * @param index for multi-tone characters, return which one
+     * @return pinyin string separated by space, "" if index out of range
+     */
+    static const string charactersToPinyins(const string& characters, size_t index, bool includeTone = false);
     static const string getCandidates(const string& pinyin, int tone);
     /**
      * add essential space as seperator (greedy)

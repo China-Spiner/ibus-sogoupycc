@@ -9,6 +9,7 @@
 
 #include "PinyinDatabase.h"
 #include "defines.h"
+#include "PinyinSequence.h"
 
 #define DB_CACHE_SIZE "16384"
 #define DB_PREFETCH_LEN 6 
@@ -32,7 +33,7 @@ PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
             sql = "";
             for (size_t i = 0; i < DB_PREFETCH_LEN; i++) {
                 char buf[8];
-                snprintf(buf, sizeof(buf), "%d", i);
+                snprintf(buf, sizeof (buf), "%d", i);
                 sql += string("SELECT * FROM py_phrase_") + buf + ";\n";
             }
             sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
@@ -60,12 +61,15 @@ const bool PinyinDatabase::isDatabaseOpened() const {
     return (db != NULL);
 }
 
-void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, const int countLimit, const double longPhraseAdjust, const int lengthLimit) {
-    DEBUG_PRINT(3, "[PYDB] query: %s\n", pinyins.c_str());
+void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, const int limitCount, const double longPhraseAdjust, const int limitLength) {
+    query(PinyinSequence(pinyins), candidateList, limitCount, longPhraseAdjust, limitLength);
+}
+
+void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candidateList, const int countLimit, const double longPhraseAdjust, const int lengthLimit) {
+    DEBUG_PRINT(3, "[PYDB] query: %s\n", pinyins.toString().c_str());
 
     if (!db) return;
 
-    string s = pinyins + " ";
     string queryWhere;
     char idString[12], whereBuffer[128], limitBuffer[32];
     int lengthMax = lengthLimit;
@@ -73,12 +77,13 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
     if (lengthMax < 0) lengthMax = 1;
     if (lengthMax > PINYIN_DB_ID_MAX) lengthMax = PINYIN_DB_ID_MAX;
 
-    for (size_t pos = s.find(' '), lastPos = -1, id = 0; pos != string::npos; id++, lastPos = pos, pos = s.find(' ', pos + 1)) {
+
+    for (size_t id = 0; id < pinyins.size(); ++id) {
         // "chuang qian ming yue guang"
         //        ^    ^
         //  lastPos  pos
-        if ((int)id > lengthMax) break;
-        string pinyin = s.substr(lastPos + 1, pos - lastPos - 1);
+        if ((int) id > lengthMax) break;
+        string pinyin = pinyins[id];
 
         snprintf(idString, sizeof (idString), "%d", id);
 
@@ -156,6 +161,130 @@ void PinyinDatabase::query(const string pinyins, CandidateList& candidateList, c
         }
         sqlite3_finalize(stmt);
     }
+}
+
+string PinyinDatabase::getPinyinFromID(int consonantId, int vowelId) {
+    string consonant, vowel;
+    switch (consonantId) {
+        case PinyinDefines::PINYIN_ID_Q: consonant = "q";
+            break;
+        case PinyinDefines::PINYIN_ID_W: consonant = "w";
+            break;
+        case PinyinDefines::PINYIN_ID_R: consonant = "r";
+            break;
+        case PinyinDefines::PINYIN_ID_T: consonant = "t";
+            break;
+        case PinyinDefines::PINYIN_ID_Y: consonant = "y";
+            break;
+        case PinyinDefines::PINYIN_ID_P: consonant = "p";
+            break;
+        case PinyinDefines::PINYIN_ID_S: consonant = "s";
+            break;
+        case PinyinDefines::PINYIN_ID_D: consonant = "d";
+            break;
+        case PinyinDefines::PINYIN_ID_F: consonant = "f";
+            break;
+        case PinyinDefines::PINYIN_ID_G: consonant = "g";
+            break;
+        case PinyinDefines::PINYIN_ID_H: consonant = "h";
+            break;
+        case PinyinDefines::PINYIN_ID_J: consonant = "j";
+            break;
+        case PinyinDefines::PINYIN_ID_K: consonant = "k";
+            break;
+        case PinyinDefines::PINYIN_ID_L: consonant = "l";
+            break;
+        case PinyinDefines::PINYIN_ID_Z: consonant = "z";
+            break;
+        case PinyinDefines::PINYIN_ID_X: consonant = "x";
+            break;
+        case PinyinDefines::PINYIN_ID_C: consonant = "c";
+            break;
+        case PinyinDefines::PINYIN_ID_B: consonant = "b";
+            break;
+        case PinyinDefines::PINYIN_ID_N: consonant = "n";
+            break;
+        case PinyinDefines::PINYIN_ID_M: consonant = "m";
+            break;
+        case PinyinDefines::PINYIN_ID_ZH: consonant = "zh";
+            break;
+        case PinyinDefines::PINYIN_ID_CH: consonant = "ch";
+            break;
+        case PinyinDefines::PINYIN_ID_SH: consonant = "sh";
+            break;
+    }
+
+    switch (vowelId) {
+        case PinyinDefines::PINYIN_ID_A: vowel = "a";
+            break;
+        case PinyinDefines::PINYIN_ID_AI: vowel = "ai";
+            break;
+        case PinyinDefines::PINYIN_ID_AN: vowel = "an";
+            break;
+        case PinyinDefines::PINYIN_ID_ANG: vowel = "ang";
+            break;
+        case PinyinDefines::PINYIN_ID_AO: vowel = "ao";
+            break;
+        case PinyinDefines::PINYIN_ID_E: vowel = "e";
+            break;
+        case PinyinDefines::PINYIN_ID_EI: vowel = "ei";
+            break;
+        case PinyinDefines::PINYIN_ID_EN: vowel = "en";
+            break;
+        case PinyinDefines::PINYIN_ID_ENG: vowel = "eng";
+            break;
+        case PinyinDefines::PINYIN_ID_ER: vowel = "er";
+            break;
+        case PinyinDefines::PINYIN_ID_I: vowel = "i";
+            break;
+        case PinyinDefines::PINYIN_ID_IA: vowel = "ia";
+            break;
+        case PinyinDefines::PINYIN_ID_IAN: vowel = "ian";
+            break;
+        case PinyinDefines::PINYIN_ID_IANG: vowel = "iang";
+            break;
+        case PinyinDefines::PINYIN_ID_IAO: vowel = "iao";
+            break;
+        case PinyinDefines::PINYIN_ID_IE: vowel = "ie";
+            break;
+        case PinyinDefines::PINYIN_ID_IN: vowel = "in";
+            break;
+        case PinyinDefines::PINYIN_ID_ING: vowel = "ing";
+            break;
+        case PinyinDefines::PINYIN_ID_IONG: vowel = "iong";
+            break;
+        case PinyinDefines::PINYIN_ID_IU: vowel = "iu";
+            break;
+        case PinyinDefines::PINYIN_ID_O: vowel = "o";
+            break;
+        case PinyinDefines::PINYIN_ID_ONG: vowel = "ong";
+            break;
+        case PinyinDefines::PINYIN_ID_OU: vowel = "ou";
+            break;
+        case PinyinDefines::PINYIN_ID_U: vowel = "u";
+            break;
+        case PinyinDefines::PINYIN_ID_UA: vowel = "ua";
+            break;
+        case PinyinDefines::PINYIN_ID_UAI: vowel = "uai";
+            break;
+        case PinyinDefines::PINYIN_ID_UAN: vowel = "uan";
+            break;
+        case PinyinDefines::PINYIN_ID_UANG: vowel = "uang";
+            break;
+        case PinyinDefines::PINYIN_ID_UE:/*case PinyinDefines::PINYIN_ID_VE:*/
+            vowel = "ue";
+            break;
+        case PinyinDefines::PINYIN_ID_UI: vowel = "ui";
+            break;
+        case PinyinDefines::PINYIN_ID_UN: vowel = "un";
+            break;
+        case PinyinDefines::PINYIN_ID_UO: vowel = "uo";
+            break;
+        case PinyinDefines::PINYIN_ID_V: vowel = "v";
+            break;
+
+    }
+    return consonant + vowel;
 }
 
 void PinyinDatabase::getPinyinIDs(const string pinyin, int& consonantId, int& vowelId) {

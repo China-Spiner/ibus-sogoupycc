@@ -24,9 +24,13 @@ public:
     PinyinSequence(const string& pinyins, const char separator = ' ');
     PinyinSequence(const PinyinSequence& orig);
 
+    const bool empty();
+    void removeAt(const size_t index);
+    void clear();
     const string operator [] (size_t index) const;
     const size_t size() const;
     string toString(const size_t startIndex = 0, const size_t length = 0, const char separator = ' ') const;
+    void fromString(const string& pinyins, const char separator = ' ');
 
     virtual ~PinyinSequence();
 private:

@@ -5,6 +5,7 @@
 
 #include <cassert>
 #include "PinyinUtility.h"
+#include "defines.h"
 
 // no "ve" here in validPinyins, all "ue"
 const set<string> PinyinUtility::validPinyins = setInitializer<string>("ba")("bo")("bai")("bei")("bao")("ban")("ben")("bang")("beng")("bi")("bie")("biao")("bian")("bin")("bing")("bu")("ci")("ca")("ce")("cai")("cao")("cou")("can")("cen")("cang")("ceng")("cu")("cuo")("cui")("cuan")("cun")("cong")("chi")("cha")("che")("chai")("chao")("chou")("chan")("chen")("chang")("cheng")("chu")("chuo")("chuai")("chui")("chuan")("chuang")("chun")("chong")("da")("de")("dai")("dao")("dou")("dan")("dang")("deng")("di")("die")("diao")("diu")("dian")("ding")("du")("duo")("dui")("duan")("dun")("dong")("fa")("fo")("fei")("fou")("fan")("fen")("fang")("feng")("fu")("ga")("ge")("gai")("gei")("gao")("gou")("gan")("gen")("gang")("geng")("gu")("gua")("guo")("guai")("gui")("guan")("gun")("guang")("gong")("ha")("he")("hai")("hei")("hao")("hou")("han")("hen")("hang")("heng")("hu")("hua")("huo")("huai")("hui")("huan")("hun")("huang")("hong")("ji")("jia")("jie")("jiao")("jiu")("jian")("jin")("jing")("jiang")("ju")("jue")("juan")("jun")("jiong")("ka")("ke")("kai")("kao")("kou")("kan")("ken")("kang")("keng")("ku")("kua")("kuo")("kuai")("kui")("kuan")("kun")("kuang")("kong")("la")("le")("lai")("lei")("lao")("lan")("lang")("leng")("li")("ji")("lie")("liao")("liu")("lian")("lin")("liang")("ling")("lou")("lu")("luo")("luan")("lun")("long")("lv")("lue")("ma")("mo")("me")("mai")("mei")("mao")("mou")("man")("men")("mang")("meng")("mi")("mie")("miao")("miu")("mian")("min")("ming")("mu")("na")("ne")("nai")("nei")("nao")("nou")("nan")("nen")("nang")("neng")("ni")("nie")("niao")("niu")("nian")("nin")("niang")("ning")("nu")("nuo")("nuan")("nong")("nv")("nue")("pa")("po")("pai")("pei")("pao")("pou")("pan")("pen")("pang")("peng")("pi")("pie")("piao")("pian")("pin")("ping")("pu")("qi")("qia")("qie")("qiao")("qiu")("qian")("qin")("qiang")("qing")("qu")("que")("quan")("qun")("qiong")("ri")("re")("rao")("rou")("ran")("ren")("rang")("reng")("ru")("ruo")("rui")("ruan")("run")("rong")("si")("sa")("se")("sai")("san")("sao")("sou")("sen")("sang")("seng")("su")("suo")("sui")("suan")("sun")("song")("shi")("sha")("she")("shai")("shei")("shao")("shou")("shan")("shen")("shang")("sheng")("shu")("shua")("shuo")("shuai")("shui")("shuan")("shun")("shuang")("ta")("te")("tai")("tao")("tou")("tan")("tang")("teng")("ti")("tie")("tiao")("tian")("ting")("tu")("tuan")("tuo")("tui")("tun")("tong")("wu")("wa")("wo")("wai")("wei")("wan")("wen")("wang")("weng")("xi")("xia")("xie")("xiao")("xiu")("xian")("xin")("xiang")("xing")("xu")("xue")("xuan")("xun")("xiong")("yi")("ya")("yo")("ye")("yai")("yao")("you")("yan")("yin")("yang")("ying")("yu")("yue")("yuan")("yun")("yong")("yu")("yue")("yuan")("yun")("yong")("zi")("za")("ze")("zai")("zao")("zei")("zou")("zan")("zen")("zang")("zeng")("zu")("zuo")("zui")("zun")("zuan")("zong")("zhi")("zha")("zhe")("zhai")("zhao")("zhou")("zhan")("zhen")("zhang")("zheng")("zhu")("zhua")("zhuo")("zhuai")("zhuang")("zhui")("zhuan")("zhun")("zhong")("a")("e")("ei")("ai")("ei")("ao")("o")("ou")("an")("en")("ang")("eng")("er")();
@@ -41,7 +42,7 @@ const string PinyinUtility::separatePinyins(const string& pinyins) {
                 // consider a futher step, next one ?
                 // this should help to avoid some greedy failure case
                 string nextOne;
-                if (unparsedPinyins.length() > (size_t)i) nextOne = unparsedPinyins.substr(i, 1);
+                if (unparsedPinyins.length() > (size_t) i) nextOne = unparsedPinyins.substr(i, 1);
                 if (nextOne.empty() || nextOne == "'" || nextOne == " " || isValidPartialPinyin(nextOne)) {
                     r += unparsedPinyins.substr(0, i);
                     unparsedPinyins.erase(0, i);
@@ -58,6 +59,11 @@ const string PinyinUtility::separatePinyins(const string& pinyins) {
         unparsedPinyins.erase(0, 1);
     }
     return r;
+}
+
+const bool PinyinUtility::isRecognisedCharacter(const string& character) {
+    staticInitializer();
+    return gb2312characterMap.find(character) != gb2312characterMap.end();
 }
 
 const bool PinyinUtility::isValidPinyin(const string& pinyin) {
@@ -80,6 +86,8 @@ void PinyinUtility::staticInitializer() {
 #undef GB2312_ENTRY
         // build reverse-map, character to pinyin
         gb2312characterMap.clear();
+
+        // IMPROVE: use g_utf8_... method to travel characters
         for (map<string, string>::iterator pinyinPair = gb2312pinyinMap.begin(); pinyinPair != gb2312pinyinMap.end(); ++pinyinPair) {
             string& characters = pinyinPair->second;
             for (size_t pos = 0; pos < characters.length(); pos += 3) {
@@ -105,58 +113,55 @@ const string PinyinUtility::getCandidates(const string& pinyin, int tone) {
 
     assert(tone <= 5 && tone > 0);
     static const string tones[6] = {"", "1", "2", "3", "4", "5"};
-    map<string, string>::iterator it = gb2312pinyinMap.find(pinyin + tones[tone]);
+    map<string, string>::const_iterator it = gb2312pinyinMap.find(pinyin + tones[tone]);
     if (it != gb2312pinyinMap.end()) {
         return it->second;
     } else return "";
 }
 
-const string PinyinUtility::charactersToPinyins(const string& characters, bool includeTone) {
+const string PinyinUtility::charactersToPinyins(const string& characters, size_t index, bool includeTone) {
     staticInitializer();
 
-    string pinyins, unregonised;
+    PinyinSequence ps = characters;
 
-    for (size_t pos = 0; pos < characters.length();) {
-        // each chinese character takes 3 bytes using UTF-8
-        // TODO: use glib to handle utf8 characters
-        string character = characters.substr(pos, 3);
-        multimap<string, map<string, string>::iterator >::iterator pinyinPair = gb2312characterMap.find(character);
-        if (pinyinPair != gb2312characterMap.end()) {
-            if (unregonised.length() > 0) {
-                // if it is partical pinyin, it will be converted, no additional space
-                if (pinyins.length() > 0) pinyins += " ";
-                pinyins += unregonised;
-                unregonised = "";
-            }
-            if (pinyins.length() > 0) pinyins += " ";
-            if (includeTone) pinyins += pinyinPair->second->first;
-            else pinyins += pinyinPair->second->first.substr(0, pinyinPair->second->first.length() - 1);
-            pos += 3;
-        } else {
-            // unregonised, only take 1 character, buffered
-            if (characters[pos] == ' ') {
-                // add space when necessary
-                if (unregonised.length() > 1 && unregonised[unregonised.length() - 1] != ' ') {
-                    // if it is partical pinyin, do not add space
-                    size_t lastPinyinPos = unregonised.find_last_of(' ', unregonised.length() - 1);
+    size_t id = index;
+    string r;
 
-                    if (lastPinyinPos == string::npos) lastPinyinPos = 0;
-                    else lastPinyinPos++;
-
-                    string possibleParticalPinyin = unregonised.substr(lastPinyinPos, unregonised.length() - lastPinyinPos);
-                    if (!isValidPartialPinyin(possibleParticalPinyin)) unregonised += ' ';
+    for (size_t i = 0; i < ps.size(); ++i) {
+        DEBUG_PRINT(7, "[UTIL] ps[%d] = '%s'\n", i, ps[i].c_str());
+        if (isRecognisedCharacter(ps[i])) {
+            // no additional space, should be converted
+            DEBUG_PRINT(7, "[UTIL]  found chs char: '%s'\n", ps[i].c_str());
+            typedef multimap<string, map<string, string>::iterator >::iterator cmIterator;
+            size_t rangeSize = gb2312characterMap.count(ps[i]), j = 0;
+            if (rangeSize > 0) {
+                // found, convert it to pinyin
+                pair<cmIterator, cmIterator> range = gb2312characterMap.equal_range(ps[i]);
+                for (cmIterator it = range.first; it != range.second; ++it) {
+                    if (j++ == id % rangeSize) {
+                        // pick up this
+                        string pinyin = it->second->first;
+                        DEBUG_PRINT(7, "[UTIL]  pick up pinyin: '%s'\n", pinyin.c_str());
+                        if (!includeTone) pinyin.erase(pinyin.length() - 1, 1);
+                        r += pinyin + " ";
+                        break; // break for
+                    }
                 }
+                id /= rangeSize;
+            } else {
+                r += ps[i];
             }
-            unregonised += characters[pos];
-            pos++;
+        } else {
+            DEBUG_PRINT(7, "[UTIL]  found normal char: '%s'\n", ps[i].c_str());
+            r += ps[i] + " ";
         }
     }
-    if (unregonised.length() > 0) {
-        if (pinyins.length() > 0) pinyins += " ";
-        if (isValidPartialPinyin(unregonised.substr(0, unregonised.length() - 1)))
-            unregonised.erase(unregonised.length() - 1, 1);
-        pinyins += unregonised;
-        unregonised = "";
+    // remove last space
+    if (r.c_str()[r.length() - 1] == ' ') r.erase(r.length() - 1, 1);
+    if (index > 0 && id > 0) {
+        // index overflow
+        return "";
+    } else {
+        return r;
     }
-    return pinyins;
 }
