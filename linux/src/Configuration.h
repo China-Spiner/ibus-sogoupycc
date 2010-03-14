@@ -100,6 +100,9 @@ namespace Configuration {
     // half to full width punctuation map
     extern PunctuationMap punctuationMap;
 
+    // multi tone limit
+    extern size_t multiToneLimit;
+
     // functions (callby LuaBinding, main)
     void addConstantsToLua(LuaBinding& luaBinding);
     void staticInit();

@@ -17,7 +17,7 @@
 #endif
 
 #ifndef VERSION
-#define VERSION "0.1.4"
+#define VERSION "0.2.0"
 #endif
 
 // for debugging

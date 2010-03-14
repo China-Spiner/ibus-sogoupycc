@@ -19,6 +19,9 @@ int LuaBinding::l_applySettings(lua_State* L) {
     DEBUG_PRINT(3, "[LUABIND] l_applySettings\n");
     LuaBinding& lb = *luaStates[L];
 
+    // multi-tone chinese lookup result limit
+    Configuration::multiToneLimit = lb.getValue("multi_tone_limit", Configuration::multiToneLimit);
+    
     // database confs
     Configuration::dbResultLimit = lb.getValue("db_result_limit", Configuration::dbResultLimit);
     Configuration::dbLengthLimit = lb.getValue("db_length_limit", Configuration::dbLengthLimit);

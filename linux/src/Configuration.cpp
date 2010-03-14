@@ -43,6 +43,9 @@ namespace Configuration {
     // punctuations
     PunctuationMap punctuationMap;
 
+    // multi tone chineses
+    size_t multiToneLimit = 2;
+
     // database confs
     int dbResultLimit = 32, dbLengthLimit = 5;
     string dbOrder = "";
