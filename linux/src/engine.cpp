@@ -553,9 +553,9 @@ engineProcessKeyEventStart:
                     if (engine->engMode) {
                         *engine->preedit = "";
                         *engine->activePreedit = "";
-                        if (Configuration::showNotification) XUtility::showNotify("已切换到英文模式", NULL, PKGDATADIR "/icons/engmode-on.png");
+                        if (Configuration::showNotification) XUtility::showStaticNotify("已切换到英文模式", NULL, PKGDATADIR "/icons/engmode-on.png");
                     } else {
-                        if (Configuration::showNotification) XUtility::showNotify("已切换到中文模式", NULL, PKGDATADIR "/icons/engmode-off.png");
+                        if (Configuration::showNotification) XUtility::showStaticNotify("已切换到中文模式", NULL, PKGDATADIR "/icons/engmode-off.png");
                     }
                     engineUpdateProperties(engine);
                     res = TRUE;

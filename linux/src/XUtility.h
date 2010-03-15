@@ -24,7 +24,6 @@
 
 #include <string>
 #include <pthread.h>
-#include <gtk/gtk.h>
 
 #include "defines.h"
 
@@ -32,34 +31,19 @@ using std::string;
 
 // all static
 
-class XUtility {
-public:
-    static const string getSelection();
-    static const long long getSelectionUpdatedTime();
-    static void setSelectionUpdatedTime(long long time = 0);
-    static const long long getCurrentTime();
-    static bool showNotify(const char* summary, const char* body = "", const char* iconPath = APP_ICON);
+namespace XUtility {
 
-    static long long MICROSECOND_PER_SECOND;
+    const string getSelection();
+    const long long getSelectionUpdatedTime();
+    void setSelectionUpdatedTime(long long time = 0);
+    const long long getCurrentTime();
+    bool showNotify(const char* summary, const char* body = "", const char* iconPath = APP_ICON);
+    bool showStaticNotify(const char* summary, const char* body = "", const char* iconPath = APP_ICON);
 
-    static void staticDestruct();
-    static void staticInit();
-private:
-    XUtility();
-    virtual ~XUtility();
-    XUtility(const XUtility& orig);
+    extern const long long MICROSECOND_PER_SECOND;
 
-    static GtkClipboard *primaryClipboard;
-    static pthread_t gtkMainLoopThread;
-    static pthread_rwlock_t selectionRwLock;
-    static string currentSelection;
-    static long long updatedTime;
-    static bool staticInited;
-    static bool running;
-    static bool notifyInited;
-    static void* gtkMainLoop(void*);
-    static void* updateSelection();
-    static void* updateSelectionThread(void*);
+    void staticDestruct();
+    void staticInit();
 };
 
 #endif	/* _XUTILITY_H */

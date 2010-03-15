@@ -17,6 +17,7 @@
 #include <string>
 #include <ibus.h>
 #include <signal.h>
+#include <gtk/gtk.h>
 
 #include "defines.h"
 #include "engine.h"
