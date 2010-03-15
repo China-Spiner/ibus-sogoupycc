@@ -16,6 +16,8 @@
 #define PKGDATADIR "/usr/share/ibus-sogoupycc"
 #endif
 
+#define APP_ICON (PKGDATADIR "/icons/ibus-sogoupycc.png")
+
 #ifndef VERSION
 #define VERSION "0.2.0"
 #endif

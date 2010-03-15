@@ -71,6 +71,7 @@ struct _IBusSgpyccEngine {
     IBusProperty *extensionMenuProp;
 
     // punc map (have states, should store here)
+    // edit: use global, for punc_map may be updated
     PunctuationMap *punctuationMap;
 };
 
@@ -233,13 +234,14 @@ static void engineInit(IBusSgpyccEngine *engine) {
     }
 
     // punctuation map
-    engine->punctuationMap = new PunctuationMap(Configuration::punctuationMap);
+    // engine->punctuationMap = new PunctuationMap(Configuration::punctuationMap);
+    engine->punctuationMap = &Configuration::punctuationMap;
 
     // properties
     engine->propList = ibus_prop_list_new();
     engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
-    engine->extensionMenuProp = ibus_property_new("extensionMenu", PROP_TYPE_MENU, NULL, PKGDATADIR "/icons/menu.png", NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    engine->extensionMenuProp = ibus_property_new("extensionMenu", PROP_TYPE_MENU, NULL, PKGDATADIR "/icons/extensions.png", NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     ibus_property_set_sub_props(engine->extensionMenuProp, Configuration::extensionList);
 
     // extension sub props    
@@ -264,7 +266,7 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     delete engine->correctings;
 
     // delete other things
-    delete engine->punctuationMap;
+    // delete engine->punctuationMap;
 
     // unref g objects
     DELETE_G_OBJECT(engine->table);
@@ -399,7 +401,11 @@ engineProcessKeyEventStart:
                     // use cloud client commit, do not direct commit !
                     engine->cloudClient->request(candidate->text, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                     // remove pinyin section from commitingPinyins
-                    for (int i = 0; i < length; ++i) engine->correctings->removeAt(0);
+                    for (int i = 0; i < length; ++i) {
+                        if (!engine->commitedConvertingPinyins->empty()) *engine->commitedConvertingPinyins += ' ';
+                        *engine->commitedConvertingPinyins += (*engine->correctings)[0].c_str();
+                        engine->correctings->removeAt(0);
+                    }
                     *engine->commitedConvertingCharacters += candidate->text;
                     // rescan, rebuild lookup table
                     engineClearLookupTable(engine);
@@ -547,6 +553,9 @@ engineProcessKeyEventStart:
                     if (engine->engMode) {
                         *engine->preedit = "";
                         *engine->activePreedit = "";
+                        if (Configuration::showNotification) XUtility::showNotify("已切换到英文模式", NULL, PKGDATADIR "/icons/engmode-on.png");
+                    } else {
+                        if (Configuration::showNotification) XUtility::showNotify("已切换到中文模式", NULL, PKGDATADIR "/icons/engmode-off.png");
                     }
                     engineUpdateProperties(engine);
                     res = TRUE;
@@ -723,11 +732,16 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName
         // show avg response time ... info
         char statisticsBuffer[1024];
         if (totalRequestCount == 0) {
-            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n已发送请求: %d 个\n失败的请求: %d 个\n", totalRequestCount, totalFailedRequestCount);
+            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "已发送请求: %d 个\n失败的请求: %d 个\n", totalRequestCount, totalFailedRequestCount);
         } else {
-            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "\n==== 统计数据 ====\n已发送请求: %d 个\n失败的请求: %d 个\n平均响应时间: %.3lf 秒\n最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
+            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "已发送请求: %d 个\n失败的请求: %d 个\n平均响应时间: %.3lf 秒\n最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
         }
-        engine->cloudClient->request(statisticsBuffer, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        if (Configuration::showNotification) {
+            XUtility::showNotify("统计数据", statisticsBuffer);
+        } else {
+            engine->cloudClient->request("\n==== 统计数据 ====\n", directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+            engine->cloudClient->request(statisticsBuffer, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        }
     } else if (propName[0] == '.') {
         // extension action
         Configuration::activeExtension(propName + 1);
@@ -745,7 +759,11 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
     } else {
         ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/idle.png");
     }
-    ibus_property_set_sensitive(engine->extensionMenuProp, Configuration::activeEngine != NULL);
+
+    ibus_property_set_sensitive(engine->engModeProp, engine->enabled);
+    ibus_property_set_sensitive(engine->requestingProp, engine->enabled);
+    ibus_property_set_sensitive(engine->extensionMenuProp, engine->enabled && (Configuration::activeEngine != NULL));
+
     ibus_engine_register_properties((IBusEngine*) engine, engine->propList);
 }
 
@@ -769,11 +787,13 @@ static void engineReset(IBusSgpyccEngine * engine) {
 static void engineEnable(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(1, "[ENGINE] Enable\n");
     engine->enabled = true;
+    engineUpdateProperties(engine);
 }
 
 static void engineDisable(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(1, "[ENGINE] Disable\n");
     engine->enabled = false;
+    engineUpdateProperties(engine);
 }
 
 static void engineSetCursorLocation(IBusSgpyccEngine *engine, gint x, gint y, gint w, gint h) {
@@ -1018,7 +1038,7 @@ string luaFunc(void* voidData, const string & requestString) {
 static int l_commitText(lua_State * L) {
     DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
     luaL_checkstring(L, 1);
-    IBusSgpyccEngine* engine = (IBusSgpyccEngine*)Configuration::activeEngine;
+    IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
     if (engine)
         engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     return 0; // return 0 value to lua code
@@ -1027,7 +1047,7 @@ static int l_commitText(lua_State * L) {
 static int l_sendRequest(lua_State * L) {
     DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
     luaL_checkstring(L, 1);
-    IBusSgpyccEngine* engine = (IBusSgpyccEngine*)Configuration::activeEngine;
+    IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
     if (!engine) return 0;
 
     engine->requesting = true;
@@ -1039,5 +1059,10 @@ static int l_sendRequest(lua_State * L) {
     } else {
         engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     }
+    // delete selection
+    IBusText *emptyText = ibus_text_new_from_static_string("");
+    ibus_engine_commit_text((IBusEngine*) engine, emptyText);
+    g_object_unref(emptyText);
+    engineUpdatePreedit(engine);
     return 0; // return 0 value to lua code
 }

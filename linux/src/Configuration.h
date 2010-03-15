@@ -112,6 +112,7 @@ namespace Configuration {
     extern bool strictDoublePinyin;
     extern bool startInEngMode;
     extern bool writeRequestCache;
+    extern bool showNotification;
 
     // selection timeout tolerance
     extern long long selectionTimout;

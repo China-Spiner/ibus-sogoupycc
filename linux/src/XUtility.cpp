@@ -4,6 +4,10 @@
  */
 
 #include "XUtility.h"
+#include <sys/timex.h>
+#include <libnotify/notify.h>
+#include <libnotify/notification.h>
+#include "defines.h"
 
 GtkClipboard *XUtility::primaryClipboard;
 
@@ -15,6 +19,7 @@ pthread_rwlock_t XUtility::selectionRwLock;
 
 bool XUtility::staticInited = false;
 bool XUtility::running = false;
+bool XUtility::notifyInited = false;
 
 long long XUtility::MICROSECOND_PER_SECOND = 1000000;
 
@@ -28,9 +33,13 @@ void XUtility::staticDestruct() {
     DEBUG_PRINT(1, "[XUTIL] staticDestruct\n");
     if (staticInited) {
         running = false;
+        if (notifyInited) {
+            notify_uninit();
+            notifyInited = false;
+        }
         gtk_main_quit();
         pthread_rwlock_destroy(&selectionRwLock);
-        // TODO: other cleanning, how ever, seems this loop here never ends
+        // IMPROVE: other cleanning, how ever, seems this loop here never ends
     }
 }
 
@@ -69,7 +78,21 @@ void XUtility::staticInit() {
 
     pthread_rwlock_init(&selectionRwLock, NULL);
     running = true;
+
+    // init libnotify
+    notifyInited = notify_init("ibus-sogoupycc");
+
     staticInited = true;
+}
+
+bool XUtility::showNotify(const char* summary, const char* body, const char* iconPath) {
+    DEBUG_PRINT(2, "[XUTIL] showNotify(%s, %s, %s)\n", summary, body, iconPath);
+    if (!notifyInited) return false;
+    if (summary == NULL || summary[0] == '\0') return false;
+    NotifyNotification *notify = notify_notification_new(summary, body, iconPath, NULL);
+    int r = notify_notification_show(notify, NULL);
+    g_object_unref(G_OBJECT(notify));
+    return (r != FALSE);
 }
 
 XUtility::XUtility() {

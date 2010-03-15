@@ -200,6 +200,18 @@ private:
      * out: string
      */
     static int l_getSelection(lua_State * L);
+    /**
+     * do lua script
+     * in: string
+     * out: bool
+     */
+    static int l_executeScript(lua_State * L);
+    /**
+     * show notify
+     * in: string summary, string body(optional), string icon_path(optional)
+     * out: -
+     */
+    static int l_notify(lua_State *L);
 };
 
 #endif	/* _LUAIBUSBINDING_H */

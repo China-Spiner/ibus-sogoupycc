@@ -14,11 +14,32 @@
 
 
 // Lua C functions
+// IMPROVE: Reconsider where should I put these lua C functions.
+
+int LuaBinding::l_executeScript(lua_State * L) {
+    DEBUG_PRINT(2, "[LUABIND] l_executeScript\n");
+    luaL_checktype(L, 1, LUA_TSTRING);
+    LuaBinding& lb = *luaStates[L];
+    int r = lb.doString(lua_tostring(L, 1));
+    lua_pushboolean(L, r == 0);
+    return 1;
+}
 
 int LuaBinding::l_getSelection(lua_State * L) {
     DEBUG_PRINT(2, "[LUABIND] l_getSelection\n");
     lua_checkstack(L, 1);
     lua_pushstring(L, XUtility::getSelection().c_str());
+    return 1;
+}
+
+int LuaBinding::l_notify(lua_State * L) {
+    DEBUG_PRINT(2, "[LUABIND] l_notify\n");
+    luaL_checktype(L, 1, LUA_TSTRING);
+    const char* summary = lua_tostring(L, 1);
+    const char* body = lua_type(L, 2) == LUA_TSTRING ? lua_tostring(L, 2) : NULL;
+    const char* iconPath = lua_type(L, 3) == LUA_TSTRING ? lua_tostring(L, 3) : (PKGDATADIR "/icons/extensions.png");
+    lua_checkstack(L, 1);
+    lua_pushboolean(L, XUtility::showNotify(summary, body, iconPath));
     return 1;
 }
 
@@ -60,6 +81,7 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::strictDoublePinyin = lb.getValue("strict_double_pinyin", Configuration::strictDoublePinyin);
     Configuration::startInEngMode = lb.getValue("start_in_eng_mode", Configuration::startInEngMode);
     Configuration::writeRequestCache = lb.getValue("cache_requests", Configuration::writeRequestCache);
+    Configuration::showNotification = lb.getValue("show_notificaion", Configuration::writeRequestCache);
 
     // labels used in lookup table, ibus has 16 chars limition.
     {
@@ -367,6 +389,8 @@ const struct luaL_Reg LuaBinding::luaLibraryReg[] = {
     {"database_count", LuaBinding::l_getPhraseDatabaseLoadedCount},
     {"apply_settings", LuaBinding::l_applySettings},
     {"get_selection", LuaBinding::l_getSelection},
+    {"notify", LuaBinding::l_notify},
+    {"execute", LuaBinding::l_executeScript},
     {NULL, NULL}
 };
 
@@ -447,7 +471,6 @@ const lua_State* LuaBinding::getLuaState() const {
  * return 0 if no error
  */
 int LuaBinding::doString(const char* luaScript) {
-
     DEBUG_PRINT(3, "[LUABIND] doString(%s)\n", luaScript);
     pthread_mutex_lock(&luaStateMutex);
     int r = luaL_dostring(L, luaScript);
@@ -467,14 +490,12 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
     va_list vl;
     va_start(vl, sig);
 
-    assert(lua_gettop(L) == 0);
+    //assert(lua_gettop(L) == 0);
     lua_State * state = L;
 
     pthread_mutex_lock(&luaStateMutex);
     lua_checkstack(state, strlen(sig) + 2);
     int pushedCount = reachValue(funcName, "_G");
-    printf("count:%d\n", pushedCount);
-
 
     if (lua_isnil(state, -1)) {
         // function not found, here just ignore and skip.
@@ -653,7 +674,7 @@ int LuaBinding::getValueType(const char* varName, const char* libName) {
     int r = lua_type(L, -1);
     lua_pop(L, pushedCount);
     pthread_mutex_unlock(&luaStateMutex);
-    DEBUG_PRINT(5, "[LUABIND] getValueType: return %s\n", r == LUA_TSTRING ? "STRING" : (r == LUA_TNIL ? "NIL" : (r == LUA_TNUMBER ? "NUMBER" : (r == LUA_TTABLE ? "TABLE" : "<OTHER>"))));
+    DEBUG_PRINT(6, "[LUABIND] getValueType: return %s\n", r == LUA_TSTRING ? "STRING" : (r == LUA_TNIL ? "NIL" : (r == LUA_TNUMBER ? "NUMBER" : (r == LUA_TTABLE ? "TABLE" : "<OTHER>"))));
     return r;
 }
 

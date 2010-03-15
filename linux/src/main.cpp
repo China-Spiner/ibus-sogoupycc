@@ -62,7 +62,7 @@ static void ibusRegister(bool callByIbus) {
             "zh_CN",
             "GPLv2",
             "WU Jun <quark@lihdd.net>",
-            PKGDATADIR "/icons/ibus-sogoupycc.png",
+            APP_ICON,
             "en"));
 
     if (callByIbus) ibus_bus_request_name(bus, "org.freedesktop.IBus.sgycc", 0);

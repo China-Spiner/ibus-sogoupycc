@@ -47,6 +47,7 @@ namespace Configuration {
     bool strictDoublePinyin = true;
     bool startInEngMode = false;
     bool writeRequestCache = true;
+    bool showNotification = true;
 
     // selection timeout tolerance
     long long selectionTimout = 3LL * XUtility::MICROSECOND_PER_SECOND;
@@ -346,6 +347,14 @@ static int l_registerCommand(lua_State *L) {
     unsigned int modifiers = lua_tointeger(L, 2);
     string label = lua_tostring(L, 3);
     string script = lua_tostring(L, 4);
+    // find existed same name Extension and delete it first
+    for (vector<Configuration::Extension*>::iterator it = Configuration::extensions.begin(); it != Configuration::extensions.end(); ++it) {
+        if ((*it)->getLabel() == label) {
+            // modify label
+            label = label + " (改)";
+            break;
+        }
+    }
     Configuration::extensions.push_back(new Configuration::Extension(key, modifiers, label, script));
     return 0;
 }

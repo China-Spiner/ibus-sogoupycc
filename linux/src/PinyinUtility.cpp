@@ -3,6 +3,7 @@
  * Author: WU Jun <quark@lihdd.net>
  */
 
+#include <cstdio>
 #include <cassert>
 #include "PinyinUtility.h"
 #include "defines.h"

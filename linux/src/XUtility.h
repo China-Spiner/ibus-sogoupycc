@@ -22,12 +22,10 @@
 #ifndef _XUTILITY_H
 #define	_XUTILITY_H
 
-#include <cstdio>
-#include <cstdlib>
 #include <string>
-#include <sys/timex.h>
 #include <pthread.h>
 #include <gtk/gtk.h>
+
 #include "defines.h"
 
 using std::string;
@@ -37,10 +35,10 @@ using std::string;
 class XUtility {
 public:
     static const string getSelection();
-
     static const long long getSelectionUpdatedTime();
     static void setSelectionUpdatedTime(long long time = 0);
     static const long long getCurrentTime();
+    static bool showNotify(const char* summary, const char* body = "", const char* iconPath = APP_ICON);
 
     static long long MICROSECOND_PER_SECOND;
 
@@ -58,6 +56,7 @@ private:
     static long long updatedTime;
     static bool staticInited;
     static bool running;
+    static bool notifyInited;
     static void* gtkMainLoop(void*);
     static void* updateSelection();
     static void* updateSelectionThread(void*);

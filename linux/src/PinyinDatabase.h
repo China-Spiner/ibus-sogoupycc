@@ -19,9 +19,9 @@
 #ifndef _PINYINDATABASE_H
 #define	_PINYINDATABASE_H
 
-#include <sqlite3.h>
 #include <string>
 #include <map>
+#include <sqlite3.h>
 
 #include "PinyinSequence.h"
 

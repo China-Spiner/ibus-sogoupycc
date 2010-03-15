@@ -1,6 +1,9 @@
 -- ibus-sogoupycc 配置文件 (Lua 兼容脚本)
 -- 详细信息请参考 http://code.google.com/p/ibus-sogoupycc/wiki/Configuration
 
+-- 加载 luasocket 模块
+local http, url = require('socket.http'), require('socket.url')
+
 assert(ime.set_double_pinyin_scheme{
 -- 自然码方案 (其他双拼方案参考 http://code.google.com/p/ibus-sogoupycc/wiki/Configuration)
 	q = {"q", {"iu"}}, w = {"w", {"ia", "ua"}}, e = {"-", {"e"}}, r = {"r", {"uan", "er"}}, t = {"t", {"ve", "ue"}}, y = {"y", {"uai", "ing"}}, u = {"sh", {"u"}}, i = {"ch", {"i"}}, o = {"", {"o", "uo"}}, p = {"p", {"un"}},
@@ -28,9 +31,6 @@ end
 -- 自动更新用户 fetcher 脚本
 if not do_not_update_fetcher then
 	os.execute("mkdir '"..ime.USERCACHEDIR.."' -p")
-	pcall(function() require 'luarocks.require' end)
-	local http = require('socket.http')
-	local url = require('socket.url')
 	http.TIMEOUT = 5
 	local ret, c = http.request('http://ibus-sogouime.googlecode.com/svn/trunk/linux/fetcher')
 	if c == 200 and ret and #ret > 100 then

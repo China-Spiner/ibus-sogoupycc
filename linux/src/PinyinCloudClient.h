@@ -16,8 +16,6 @@
 #ifndef _PinyinCloudClient_H
 #define	_PinyinCloudClient_H
 
-#include <dbus/dbus.h>
-#include <glib.h>
 #include <deque>
 #include <string>
 #include <pthread.h>

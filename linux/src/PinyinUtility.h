@@ -20,8 +20,7 @@
 #ifndef _PINYINUTILITY_H
 #define	_PINYINUTILITY_H
 
-#include <cstdio>
-#include <vector>
+
 #include <set>
 #include <map>
 #include <string>

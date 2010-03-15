@@ -3,6 +3,7 @@
  * Author: WU Jun <quark@lihdd.net>
  */
 
+#include <cstdio>
 #include "DoublePinyinScheme.h"
 #include "PinyinUtility.h"
 
