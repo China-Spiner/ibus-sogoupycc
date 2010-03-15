@@ -29,6 +29,9 @@ public:
     void clear();
     const string operator [] (size_t index) const;
     const size_t size() const;
+    /**
+     * @param length 0 indicates full length
+     */
     string toString(const size_t startIndex = 0, const size_t length = 0, const char separator = ' ') const;
     void fromString(const string& pinyins, const char separator = ' ');
 

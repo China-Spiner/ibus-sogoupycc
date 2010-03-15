@@ -47,7 +47,7 @@ struct _IBusSgpyccEngine {
     // convertingPinyins are pinyin string in preedit and should be choiced from left to right manually
     PinyinSequence* correctings;
     //string* correctingPinyins;
-    string* commitedConvertingPinyins, *commitedConvertingCharacters;
+    string* commitedConvertingPinyins, *commitedConvertingCharacters, *lastActivePreedit;
 
     // eng mode, requesting (used to update requestingProp)
     bool engMode, requesting;
@@ -122,9 +122,18 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine);
 inline static void engineClearLookupTable(IBusSgpyccEngine *engine);
 inline static void engineAppendLookupTable(IBusSgpyccEngine *engine, IBusText *candidate);
 
-// fetch functions
-string directFunc(void* data, const string& requestString);
-string fetchFunc(void* data, const string& requestString);
+// fetcher functions (callback by cloudClient)
+static string directFetcher(void* data, const string& requestString);
+static string externalFetcher(void* data, const string& requestString);
+static string luaFetcher(void* voidData, const string & requestString);
+static string preFetcher(void* voidData, const string& requestString);
+
+// request cache
+static const string getRequestCache(IBusSgpyccEngine* engine, const string& requestString);
+static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSring, const string& content);
+
+// paritical convert (using cache)
+static const string particalConvert(IBusSgpyccEngine* engine, const string& pinyins);
 
 // entry function, indeed
 
@@ -207,6 +216,8 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->activePreedit = new string();
     engine->commitedConvertingCharacters = new string();
     engine->commitedConvertingPinyins = new string();
+    engine->lastActivePreedit = new string();
+
     engine->correctings = new PinyinSequence();
 
     // internal vars
@@ -264,9 +275,10 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     delete engine->commitedConvertingCharacters;
     delete engine->commitedConvertingPinyins;
     delete engine->correctings;
+    delete engine->lastActivePreedit;
 
     // delete other things
-    // delete engine->punctuationMap;
+    // delete engine->punctuationMap; // now global
 
     // unref g objects
     DELETE_G_OBJECT(engine->table);
@@ -323,7 +335,7 @@ engineProcessKeyEventStart:
             // not found, submit 'pinyin' (it is indeed not a valid pinyin)
             engine->correctings->removeAt(0);
             if (!isChineseCharacter && !engine->correctings->empty()) pinyin += " ";
-            engine->cloudClient->request(pinyin, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+            engine->cloudClient->request(pinyin, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
         }
     }
 
@@ -345,7 +357,7 @@ engineProcessKeyEventStart:
             goto engineProcessKeyEventStart;
         } else if (keyval == IBUS_Escape) {
             // cancel correcting, submit all remaining
-            engine->cloudClient->request(engine->correctings->toString(), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+            engine->cloudClient->request(engine->correctings->toString(), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
             engine->correctings->clear();
             engine->commitedConvertingCharacters->clear();
             engine->commitedConvertingPinyins->clear();
@@ -399,7 +411,7 @@ engineProcessKeyEventStart:
                     // user select a phrase, commit it
                     int length = g_utf8_strlen(candidate->text, -1);
                     // use cloud client commit, do not direct commit !
-                    engine->cloudClient->request(candidate->text, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                    engine->cloudClient->request(candidate->text, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                     // remove pinyin section from commitingPinyins
                     for (int i = 0; i < length; ++i) {
                         if (!engine->commitedConvertingPinyins->empty()) *engine->commitedConvertingPinyins += ' ';
@@ -522,7 +534,7 @@ engineProcessKeyEventStart:
             // rtrim, assuming string::npos + 1 == 0
             engine->commitedConvertingCharacters->erase(engine->commitedConvertingCharacters->find_last_not_of(" \n\r\t") + 1);
             if (!engine->commitedConvertingCharacters->empty() && Configuration::writeRequestCache) {
-                engine->luaBinding->setValue(engine->commitedConvertingPinyins->c_str(), engine->commitedConvertingCharacters->c_str(), "request_cache");
+                writeRequestCache(engine, *engine->commitedConvertingPinyins, *engine->commitedConvertingCharacters);
             }
             XUtility::setSelectionUpdatedTime();
             engine->commitedConvertingCharacters->clear();
@@ -678,10 +690,10 @@ engineProcessKeyEventStart:
                         if (engine->preedit->length() > 0) {
                             engine->requesting = true;
                             engineUpdateProperties(engine);
-                            engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                            engine->cloudClient->request(*engine->activePreedit, externalFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                             *engine->preedit = "";
                         }
-                        engine->cloudClient->request(punctuation, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                        engine->cloudClient->request(punctuation, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                         handled = true;
                     }
                 }
@@ -693,6 +705,17 @@ engineProcessKeyEventStart:
                 } else {
                     *engine->activePreedit = PinyinUtility::separatePinyins(*engine->preedit);
                 }
+
+                if (*engine->lastActivePreedit != *engine->activePreedit && !engine->activePreedit->empty()) {
+                    // send prerequest
+                    // handle case: wo ', if last pinyin is partial, do not perform prerequest
+                    PinyinSequence ps = *engine->activePreedit;
+                    string preRequestString;
+                    if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
+                    else preRequestString = ps.toString(0, ps.size() - 1);
+                    engine->cloudClient->preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                    *engine->lastActivePreedit = *engine->activePreedit;
+                }
             }
 
             // eng mode or unhandled in chinese mode
@@ -703,11 +726,11 @@ engineProcessKeyEventStart:
                 if (engine->preedit->length() > 0) {
                     engine->requesting = true;
                     engineUpdateProperties(engine);
-                    engine->cloudClient->request(*engine->activePreedit, fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                    engine->cloudClient->request(*engine->activePreedit, externalFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                     *engine->preedit = "";
                     *engine->activePreedit = "";
                 }
-                engine->cloudClient->request(keychrs, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                engine->cloudClient->request(keychrs, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                 res = TRUE;
                 break;
             }
@@ -732,15 +755,15 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName
         // show avg response time ... info
         char statisticsBuffer[1024];
         if (totalRequestCount == 0) {
-            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "已发送请求: %d 个\n失败的请求: %d 个\n", totalRequestCount, totalFailedRequestCount);
+            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "现在还没有数据\n");
         } else {
             snprintf(statisticsBuffer, sizeof (statisticsBuffer), "已发送请求: %d 个\n失败的请求: %d 个\n平均响应时间: %.3lf 秒\n最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
         }
         if (Configuration::showNotification) {
             XUtility::showNotify("统计数据", statisticsBuffer);
         } else {
-            engine->cloudClient->request("\n==== 统计数据 ====\n", directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-            engine->cloudClient->request(statisticsBuffer, directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+            engine->cloudClient->request("\n==== 统计数据 ====\n", directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+            engine->cloudClient->request(statisticsBuffer, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
         }
     } else if (propName[0] == '.') {
         // extension action
@@ -847,6 +870,25 @@ static void engineCursorDown(IBusSgpyccEngine * engine) {
     }
 }
 
+static const string particalConvert(IBusSgpyccEngine* engine, const string& pinyins) {
+    if (Configuration::showCachedInPreedit == false) return pinyins;
+    // check pre request result
+    PinyinSequence ps = pinyins;
+    for (size_t i = ps.size(); i > 0; i--) {
+        if (i < ps.size() || PinyinUtility::isValidPinyin(ps[i - 1])) {
+            string cache = getRequestCache(engine, ps.toString(0, i));
+            DEBUG_PRINT(5, "[ENGINE] partical convert find cache: %s\n", cache.c_str());
+            if (!cache.empty()) {
+                string remainingPinyins = ps.toString(i, 0);
+                DEBUG_PRINT(5, "[ENGINE] partical convert, remaining: %s\n", remainingPinyins.c_str());
+                if (remainingPinyins.empty()) return cache;
+                else return cache + " " + remainingPinyins;
+            }
+        }
+    }
+    return pinyins;
+}
+
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     // this function need a mutex lock, it will pop first several finished requests from cloudClient
     DEBUG_PRINT(1, "[ENGINE] Update Preedit\n");
@@ -862,9 +904,14 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     bool canCommitToClient = true;
     size_t finishedCount = 0;
 
-    // this loop will commit front responed string, set preedit string and count finishedCount
+    // commit front responed string, set preedit string and count finishedCount
+    // and, set up color list
     string commitString;
+    size_t preeditLen = 0;
+    IBusAttrList *textAttrList = ibus_attr_list_new();
+
     for (size_t i = 0; i < requestCount; ++i) {
+        size_t currReqLen;
         const PinyinCloudRequest& request = engine->cloudClient->getRequest(i);
         if (!request.responsed) canCommitToClient = false;
 
@@ -872,8 +919,21 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
             if (request.responseString.length() > 0) commitString += request.responseString;
             finishedCount++;
         } else {
-            if (request.responsed) preedit += request.responseString;
-            else preedit += request.requestString;
+            if (request.responsed) {
+                preedit += request.responseString;
+                currReqLen = g_utf8_strlen(request.responseString.c_str(), -1);
+                // colors
+                if (Configuration::requestedBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::requestedBackColor, preeditLen, preeditLen + currReqLen));
+                if (Configuration::requestedForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::requestedForeColor, preeditLen, preeditLen + currReqLen));
+            } else {
+                string requestString = particalConvert(engine, request.requestString);
+                preedit += requestString;
+                currReqLen = g_utf8_strlen(requestString.c_str(), -1);
+                // colors
+                if (Configuration::requestingBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::requestingBackColor, preeditLen, preeditLen + currReqLen));
+                if (Configuration::requestingForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::requestingForeColor, preeditLen, preeditLen + currReqLen));
+            }
+            preeditLen += currReqLen;
         }
     }
 
@@ -889,65 +949,44 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     }
 
     // append current preedit (not belong to a request, still editable, active)
-
     string activePreedit = *engine->activePreedit;
     if (!engine->correctings->empty()) {
         // only show convertingPinyins as activePreedit
         activePreedit = engine->correctings->toString();
+    } else if (Configuration::showCachedInPreedit) {
+        activePreedit = particalConvert(engine, activePreedit);
     }
     preedit += activePreedit;
-    DEBUG_PRINT(4, "[ENGINE.UpdatePreedit] preedit: %s\n", preedit.c_str());
 
     // create IBusText-type preeditText
-    IBusText *preeditText;
-    preeditText = ibus_text_new_from_string(preedit.c_str());
-    preeditText->attrs = ibus_attr_list_new();
+    size_t preeditFullLen = g_utf8_strlen(preedit.c_str(), -1);
 
-    // second loop will set color to preeditText
-    // note that '，' will be consided 1 char
-    size_t preeditLen = 0;
-    for (size_t i = finishedCount; i < requestCount; ++i) {
-        const PinyinCloudRequest& request = engine->cloudClient->getRequest(i);
-        size_t currReqLen;
-        if (request.responsed) {
-            // responsed
-            IBusText *text = ibus_text_new_from_string(request.responseString.c_str());
-            currReqLen = ibus_text_get_length(text);
-            g_object_unref(text);
-            // colors
-            if (Configuration::requestedBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(Configuration::requestedBackColor, preeditLen, preeditLen + currReqLen));
-            if (Configuration::requestedForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(Configuration::requestedForeColor, preeditLen, preeditLen + currReqLen));
-        } else {
-            // requesting
-            IBusText *text = ibus_text_new_from_string(request.requestString.c_str());
-            currReqLen = ibus_text_get_length(text);
-            g_object_unref(text);
-            // colors
-            if (Configuration::requestingBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(Configuration::requestingBackColor, preeditLen, preeditLen + currReqLen));
-            if (Configuration::requestingForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(Configuration::requestingForeColor, preeditLen, preeditLen + currReqLen));
-        }
-        preeditLen += currReqLen;
-    }
+    DEBUG_PRINT(4, "[ENGINE.UpdatePreedit] preedit: %s, full len: %d\n", preedit.c_str(), preeditFullLen);
 
     // colors, underline of (rightmost) active preedit
     // preeditLen now hasn't count rightmost active preedit
     if (!engine->correctings->empty()) {
         // for convertingPinyins, use requesting color instead
-        if (Configuration::correctingBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(Configuration::correctingBackColor, preeditLen, ibus_text_get_length(preeditText)));
-        if (Configuration::correctingForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(Configuration::correctingForeColor, preeditLen, ibus_text_get_length(preeditText)));
+        if (Configuration::correctingBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::correctingBackColor, preeditLen, preeditFullLen));
+        if (Configuration::correctingForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::correctingForeColor, preeditLen, preeditFullLen));
     } else {
-        if (Configuration::preeditBackColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_background_new(Configuration::preeditBackColor, preeditLen, ibus_text_get_length(preeditText)));
-        if (Configuration::preeditForeColor != INVALID_COLOR) ibus_attr_list_append(preeditText->attrs, ibus_attr_foreground_new(Configuration::preeditForeColor, preeditLen, ibus_text_get_length(preeditText)));
+        if (Configuration::preeditBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::preeditBackColor, preeditLen, preeditFullLen));
+        if (Configuration::preeditForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::preeditForeColor, preeditLen, preeditFullLen));
     }
-    ibus_attr_list_append(preeditText->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, preeditLen, ibus_text_get_length(preeditText)));
+    ibus_attr_list_append(textAttrList, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, preeditLen, preeditFullLen));
+
+    DEBUG_PRINT(5, "[ENGINE.UpdatePreedit] attr length: %d\n", textAttrList->attributes->len);
+    IBusText *preeditText;
+    preeditText = ibus_text_new_from_string(preedit.c_str());
+    preeditText->attrs = textAttrList;
 
     // finally, update preedit
-    if (!engine->correctings->empty()) {
+    if (engine->correctings->empty()) {
+        // cursor at rightmost
+        ibus_engine_update_preedit_text((IBusEngine *) engine, preeditText, preeditFullLen, TRUE);
+    } else {
         // cursor at left of active preedit
         ibus_engine_update_preedit_text((IBusEngine *) engine, preeditText, preeditLen, TRUE);
-    } else {
-        // cursor at rightmost
-        ibus_engine_update_preedit_text((IBusEngine *) engine, preeditText, ibus_text_get_length(preeditText), TRUE);
     }
     // remember to unref text
     g_object_unref(preeditText);
@@ -969,11 +1008,11 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
 
 // callback by PinyinCloudClient
 
-string fetchFunc(void* data, const string & requestString) {
+string externalFetcher(void* data, const string & requestString) {
     IBusSgpyccEngine* engine = (typeof (engine)) data;
     DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
 
-    string res = engine->luaBinding->getValue(requestString.c_str(), "", "request_cache");
+    string res = getRequestCache(engine, requestString);
 
     if (res.empty()) {
         char response[Configuration::fetcherBufferSize];
@@ -988,6 +1027,10 @@ string fetchFunc(void* data, const string & requestString) {
         // fgets may read '\n' in, remove it.
         fgets(response, sizeof (response), fresponse);
         pclose(fresponse);
+        for (int p = strlen(response) - 1; p >= 0; p--) {
+            if (response[p] == '\n') response[p] = 0;
+            else break;
+        }
 
         // update statistics
         totalRequestCount++;
@@ -995,30 +1038,71 @@ string fetchFunc(void* data, const string & requestString) {
         totalResponseTime += requestTime;
         if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
 
-        for (int p = strlen(response) - 1; p >= 0; p--) {
-            if (response[p] == '\n') response[p] = 0;
-            else break;
-        }
-
-        res = response;
-
-        if (res.empty()) {
+        if ((res = response).empty()) {
             // empty, means fails
             totalFailedRequestCount++;
             res = requestString;
         } else {
             if (Configuration::writeRequestCache && requestString != res) {
-                engine->luaBinding->setValue(requestString.c_str(), res.c_str(), "request_cache");
+                writeRequestCache(engine, requestString, res);
             }
         }
     }
     return res;
 }
 
-string directFunc(void* data, const string & requestString) {
+static const string getRequestCache(IBusSgpyccEngine* engine, const string& requestString) {
+    return engine->luaBinding->getValue(requestString.c_str(), "", "request_cache");
+}
+
+static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSring, const string& content) {
+    engine->luaBinding->setValue(requsetSring.c_str(), content.c_str(), "request_cache");
+}
+
+static string directFetcher(void* data, const string & requestString) {
     DEBUG_PRINT(2, "[ENGINE] directFunc(%s)\n", requestString.c_str());
 
     return requestString;
+}
+
+static string preFetcher(void* data, const string& requestString) {
+    IBusSgpyccEngine* engine = (typeof (engine)) data;
+    DEBUG_PRINT(2, "[ENGINE] preFetcher(%s)\n", requestString.c_str());
+
+    string res = getRequestCache(engine, requestString);
+
+    if (res.empty()) {
+        char timeLimitBuffer[64];
+        char response[Configuration::fetcherBufferSize];
+
+        // for statistics
+        long long startMicrosecond = XUtility::getCurrentTime();
+
+        snprintf(timeLimitBuffer, sizeof (timeLimitBuffer), " '%.2lf'", Configuration::preRequestTimeout);
+        FILE* fresponse = popen(string((Configuration::fetcherPath) + " '" + requestString + "'" + timeLimitBuffer).c_str(), "r");
+
+        // fgets may read '\n' in, remove it.
+        fgets(response, sizeof (response), fresponse);
+        pclose(fresponse);
+
+        for (int p = strlen(response) - 1; p >= 0; p--) {
+            if (response[p] == '\n') response[p] = 0;
+            else break;
+        }
+
+        if ((res = response).empty()) {
+            // empty, means fails
+            res = requestString;
+        } else {
+            // update statistics
+            totalRequestCount++;
+            double requestTime = (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
+            totalResponseTime += requestTime;
+            if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
+            if (Configuration::writeRequestCache && requestString != res) writeRequestCache(engine, requestString, res);
+        }
+    }
+    return res;
 }
 
 struct LuaFuncData {
@@ -1026,7 +1110,7 @@ struct LuaFuncData {
     string luaFuncName;
 };
 
-string luaFunc(void* voidData, const string & requestString) {
+static string luaFetcher(void* voidData, const string & requestString) {
     DEBUG_PRINT(2, "[ENGINE] luaFunc(%s)\n", requestString.c_str());
     LuaFuncData *data = (LuaFuncData*) voidData;
     string response;
@@ -1040,7 +1124,7 @@ static int l_commitText(lua_State * L) {
     luaL_checkstring(L, 1);
     IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
     if (engine)
-        engine->cloudClient->request(string(lua_tostring(L, 1)), directFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        engine->cloudClient->request(string(lua_tostring(L, 1)), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     return 0; // return 0 value to lua code
 }
 
@@ -1055,9 +1139,9 @@ static int l_sendRequest(lua_State * L) {
         LuaFuncData *data = new LuaFuncData();
         data->luaFuncName = lua_tostring(L, 2);
         data->engine = engine;
-        engine->cloudClient->request(string(lua_tostring(L, 1)), luaFunc, (void*) data, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        engine->cloudClient->request(string(lua_tostring(L, 1)), luaFetcher, (void*) data, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     } else {
-        engine->cloudClient->request(string(lua_tostring(L, 1)), fetchFunc, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        engine->cloudClient->request(string(lua_tostring(L, 1)), externalFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     }
     // delete selection
     IBusText *emptyText = ibus_text_new_from_static_string("");

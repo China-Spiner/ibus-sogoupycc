@@ -5,12 +5,11 @@ pcall(function() require 'luarocks.require' end)
 http = require('socket.http')
 url = require('socket.url')
 
-http.TIMEOUT = 0.3
 http.USERAGENT = "ibus-sogoupycc"
 keyFile = '/tmp/.sogoucloud-key'
 
 
-local py, retry, key = arg[1] or 't'
+local py, timeout, retry, key = arg[1] or 't', arg[2]
 py = py:gsub(" ","+"):gsub("[^a-z']", '')
 
 function refreshKey()
@@ -19,13 +18,16 @@ function refreshKey()
 	if #key > 0 then local file = io.open(keyFile, 'w') file:write(key) file:close() end
 end
 
+if not timeout then http.TIMEOUT, retry = 0.3, 7 else http.TIMEOUT, retry = timeout + 0, 1 end
+
+-- get key
 local file = io.open(keyFile, 'r')
 if file then key = file:read("*line") or '' file:close() end
-for attempt = 1, 7 do if (not key) or (#key == 0) then http.TIMEOUT = http.TIMEOUT * 1.5 refreshKey() else break end end
+for attempt = 1, retry do if (not key) or (#key == 0) then http.TIMEOUT = http.TIMEOUT * 1.5 refreshKey() else break end end
 
-http.TIMEOUT, retry = 0.3, 7
+if not timeout then http.TIMEOUT, retry = 0.3, 7 else http.TIMEOUT, retry = timeout + 0, 1 end
 
-while retry > 0 do
+for attempt = 1, retry do
 	local ret = http.request('http://web.pinyin.sogou.com/api/py?key='..key..'&query='..py)
 	local res = ret and ret:match('ime_callback%("(.-)"')
 	if res then
@@ -38,7 +40,6 @@ while retry > 0 do
 			end
 		end
 	end
-	retry = retry - 1
 	http.TIMEOUT = http.TIMEOUT * 1.8
 end
 

@@ -66,8 +66,9 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::correctingForeColor = lb.getValue("correcting_fore_color", Configuration::correctingForeColor);
     Configuration::correctingBackColor = lb.getValue("correcting_back_color", Configuration::correctingBackColor);
 
-    // selection timeout set, user passed here is second
+    // timeouts
     Configuration::selectionTimout = (long long) lb.getValue("sel_timeout", (double) Configuration::selectionTimout / XUtility::MICROSECOND_PER_SECOND) * XUtility::MICROSECOND_PER_SECOND;
+    Configuration::preRequestTimeout = lb.getValue("pre_request_timeout", (double) Configuration::preRequestTimeout);
 
     // keys
     Configuration::engModeKey.readFromLua(lb, "eng_mode_key");
@@ -81,7 +82,10 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::strictDoublePinyin = lb.getValue("strict_double_pinyin", Configuration::strictDoublePinyin);
     Configuration::startInEngMode = lb.getValue("start_in_eng_mode", Configuration::startInEngMode);
     Configuration::writeRequestCache = lb.getValue("cache_requests", Configuration::writeRequestCache);
-    Configuration::showNotification = lb.getValue("show_notificaion", Configuration::writeRequestCache);
+    Configuration::showNotification = lb.getValue("show_notificaion", Configuration::showNotification);
+    Configuration::preRequest = lb.getValue("pre_request", Configuration::preRequest);
+    Configuration::showCachedInPreedit = lb.getValue("show_cache_preedit", Configuration::showCachedInPreedit);
+    if (Configuration::preRequest) Configuration::writeRequestCache = true;
 
     // labels used in lookup table, ibus has 16 chars limition.
     {

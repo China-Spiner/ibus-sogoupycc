@@ -48,6 +48,11 @@ namespace Configuration {
     bool startInEngMode = false;
     bool writeRequestCache = true;
     bool showNotification = true;
+    bool preRequest = true;
+    bool showCachedInPreedit = true;
+
+    // pre request timeout
+    double preRequestTimeout = 1.;
 
     // selection timeout tolerance
     long long selectionTimout = 3LL * XUtility::MICROSECOND_PER_SECOND;

@@ -31,27 +31,27 @@ void PinyinSequence::fromString(const string& pinyins, const char separator) {
 }
 
 PinyinSequence::PinyinSequence(const PinyinSequence& orig) {
-    DEBUG_PRINT(7, "PinyinSequence::<copy construct>\n");
+    DEBUG_PRINT(7, "[PSEQ] PinyinSequence::<copy construct>\n");
     pinyinVector = orig.pinyinVector;
 }
 
 PinyinSequence::PinyinSequence(const char* pinyins, const char separator) {
-    DEBUG_PRINT(7, "PinyinSequence(\"%s\", '%c')\n", pinyins, separator);
+    DEBUG_PRINT(7, "[PSEQ] PinyinSequence(\"%s\", '%c')\n", pinyins, separator);
     fromString(pinyins, separator);
 }
 
 PinyinSequence::PinyinSequence(const string& pinyins, const char separator) {
-    DEBUG_PRINT(7, "PinyinSequence(\"%s\", '%c')\n", pinyins.c_str(), separator);
+    DEBUG_PRINT(7, "[PSEQ] PinyinSequence(\"%s\", '%c')\n", pinyins.c_str(), separator);
     fromString(pinyins, separator);
 }
 
 PinyinSequence::~PinyinSequence() {
-    DEBUG_PRINT(7, "PinyinSequence::<deconstruct>\n");
+    DEBUG_PRINT(7, "[PSEQ] PinyinSequence::<deconstruct>\n");
 }
 
 string PinyinSequence::toString(const size_t startIndex, const size_t length, const char separator) const {
     size_t stopIndex = pinyinVector.size();
-    if (length && stopIndex > startIndex + length)stopIndex = startIndex + length;
+    if (length && stopIndex > startIndex + length) stopIndex = startIndex + length;
 
     string r = "";
     for (size_t i = startIndex; i < stopIndex; i++) {

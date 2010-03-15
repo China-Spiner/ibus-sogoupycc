@@ -113,6 +113,11 @@ namespace Configuration {
     extern bool startInEngMode;
     extern bool writeRequestCache;
     extern bool showNotification;
+    extern bool preRequest;
+    extern bool showCachedInPreedit;
+
+    // pre request timeout
+    extern double preRequestTimeout;
 
     // selection timeout tolerance
     extern long long selectionTimout;

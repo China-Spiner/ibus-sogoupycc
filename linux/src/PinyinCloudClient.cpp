@@ -63,7 +63,6 @@ void* requestThreadFunc(void *data) {
         }
     }
 
-
     // not found from list (this could happen if user call remove request...)
     // in this case, just do nothing
     DEBUG_PRINT(3, "[CLOUD.REQTHREAD] request invalid. ignore\n");
@@ -74,8 +73,62 @@ void* requestThreadFunc(void *data) {
     pthread_exit(0);
 }
 
-void PinyinCloudClient::request(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam) {
+void* preRequestThreadFunc(void *data) {
+    DEBUG_PRINT(2, "[CLOUD] enter pre-request thread\n");
+    PinyinCloudRequest *request = (PinyinCloudRequest*) data;
 
+    DEBUG_PRINT(3, "[CLOUD.PREREQ] prepare to call fetch func\n");
+
+    // this may takes time
+    string responseString = request->fetchFunc(request->fetchParam, request->requestString);
+    UNUSED(responseString);
+
+    if (request->callbackFunc) {
+        DEBUG_PRINT(4, "[CLOUD.PREREQ] prepare execute callback\n");
+        (*request->callbackFunc)(request->callbackParam);
+    }
+
+    delete request;
+    DEBUG_PRINT(3, "[CLOUD.PREREQ] Exiting...\n");
+    pthread_exit(0);
+}
+
+void PinyinCloudClient::preRequest(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam) {
+    // ignore empty string request
+    if (requestString.empty()) return;
+
+    DEBUG_PRINT(3, "[CLOUD] new preRequest: %s\n", requestString.c_str());
+    PinyinCloudRequest *request = new PinyinCloudRequest;
+    request->requestString = requestString;
+    request->callbackFunc = callbackFunc;
+    request->callbackParam = callbackParam;
+    request->requestId = (nextRequestId++);
+    request->responsed = false;
+    request->fetchFunc = fetchFunc;
+    request->fetchParam = fetchParam;
+
+    DEBUG_PRINT(4, "[CLOUD] going to create thread (preRequest)\n");
+    
+    // launch thread
+    pthread_t requestThread;
+    pthread_attr_t preRequestThreadAttr;
+    int ret;
+
+    pthread_attr_init(&preRequestThreadAttr);
+    pthread_attr_setdetachstate(&preRequestThreadAttr, PTHREAD_CREATE_DETACHED);
+
+    ret = pthread_create(&requestThread, &preRequestThreadAttr, &preRequestThreadFunc, (void*) request);
+    pthread_attr_destroy(&preRequestThreadAttr);
+    DEBUG_PRINT(3, "[CLOUD] new preRequest thread: 0x%x\n", (int) requestThread);
+
+    if (ret != 0) {
+        perror("[ERROR] can not create preRequest thread");
+        delete request;
+    };
+    // request will be deleted in preRequestThread.
+}
+
+void PinyinCloudClient::request(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam) {
     // ignore empty string request
     if (requestString.empty()) return;
 
