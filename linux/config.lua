@@ -33,10 +33,11 @@ if not do_not_update_fetcher then
 	os.execute("mkdir '"..ime.USERCACHEDIR.."' -p")
 	http.TIMEOUT = 5
 	local ret, c = http.request('http://ibus-sogoupycc.googlecode.com/svn/trunk/linux/fetcher')
-	if c == 200 and ret and #ret > 100 and ret:match('ibus%-sogoupycc%-fetcher%-end' then
-		local fetcher_file = io.open(ime.USERCACHEDIR..'/fetcher','w')
+	if c == 200 and ret and #ret > 100 and ret:match('ibus%-sogoupycc%-fetcher%-end') then
+		local fetcher_file = io.open(user_fetcher,'w')
 		fetcher_file:write(ret)
 		fetcher_file:close()
-		os.execute("chmod +x '"..ime.USERCACHEDIR..'/fetcher'.."'")
+		os.execute("chmod +x '"..user_fetcher.."'")
+		ime.fetcher = user_fetcher
 	end
 end

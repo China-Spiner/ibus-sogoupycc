@@ -11,7 +11,7 @@ keyFile = '/tmp/.sogoucloud-key'
 
 
 local py, timeout, retry, key = arg[1] or 't', arg[2]
-py = py:gsub(" ","+"):gsub("[^a-z']", '')
+py = py:gsub("[^a-z]", '')
 
 function refreshKey()
 	local ret = http.request('http://web.pinyin.sogou.com/web_ime/patch.php') or ''
