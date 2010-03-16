@@ -480,6 +480,9 @@ int LuaBinding::doString(const char* luaScript) {
     int r = luaL_dostring(L, luaScript);
     if (r) {
         fprintf(stderr, "%s\n", lua_tostring(L, -1));
+        if (Configuration::showNotification) {
+            XUtility::showNotify("Lua 错误", lua_tostring(L, -1), "error");
+        }
         lua_pop(L, 1);
     }
     pthread_mutex_unlock(&luaStateMutex);
@@ -528,6 +531,9 @@ int LuaBinding::callLuaFunction(const char * const funcName, const char* sig, ..
     DEBUG_PRINT(3, "[LUABIND.CALLLUA] Params pushed\n");
     if ((ret = lua_pcall(state, narg, nres, 0)) != 0) {
         fprintf(stderr, "error calling lua function '%s.%s': %s.\nprogram is likely to crash soon\n", LIB_NAME, funcName, lua_tostring(state, -1));
+        if (Configuration::showNotification) {
+            XUtility::showNotify("Lua 错误", lua_tostring(state, -1), "error");
+        }
         pushedCount++;
         // report error early.
         goto aborting;
