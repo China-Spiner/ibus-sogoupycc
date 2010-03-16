@@ -5,6 +5,7 @@
 
 #ifndef _DEFINES_H
 #define	_DEFINES_H
+
 #include <cstring>
 #include <cstdio>
 
@@ -22,10 +23,12 @@
 #define VERSION "0.2.0"
 #endif
 
+#include "XUtility.h"
+
 // for debugging
 extern int globalDebugLevel;
 
-#define DEBUG_PRINT(level, ...) if (globalDebugLevel >= level) fprintf(stderr, "[DEBUG] L%03d (thread 0x%x): ", __LINE__, (int)pthread_self()),fprintf(stderr,__VA_ARGS__),fflush(stderr);
+#define DEBUG_PRINT(level, ...) if (globalDebugLevel >= level) fprintf(stderr, "[DEBUG] (%.3lf) L%03d (thread 0x%x): ", (double)XUtility::getCurrentTime() / XUtility::MICROSECOND_PER_SECOND, __LINE__, (int)pthread_self()),fprintf(stderr,__VA_ARGS__),fflush(stderr);
 
 #endif	/* _DEFINES_H */
 

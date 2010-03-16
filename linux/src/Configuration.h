@@ -139,6 +139,12 @@ namespace Configuration {
     void staticDestruct();
     void activeExtension(string label);
     bool activeExtension(unsigned keyval, unsigned keymask);
+
+    // lua C functions
+    /**
+     * in: (key = I..., mod = key.SHIFT_MASK, label = "blabla", script = "functionName")
+     */
+    extern int l_registerCommand(lua_State *L);
 };
 
 

@@ -8,9 +8,6 @@
 #include "XUtility.h"
 #include <ibus.h>
 
-// lua C function
-static int l_registerCommand(lua_State *L);
-
 namespace Configuration {
     void* activeEngine = NULL;
 
@@ -308,7 +305,9 @@ namespace Configuration {
         luaBinding.setValue("None", IBUS_VoidSymbol, "key");
         // other constants
         luaBinding.setValue("COLOR_NOCHANGE", INVALID_COLOR);
-        luaBinding.addFunction(l_registerCommand, "register_command");
+
+        // moved to LuaBinding static C function register array
+        // luaBinding.addFunction(l_registerCommand, "register_command");
     }
 
     void staticDestruct() {
@@ -335,32 +334,30 @@ namespace Configuration {
         }
         return false;
     }
-};
 
-/**
- * in: (key = I..., mod = key.SHIFT_MASK, label = "blabla", script = "functionName")
- */
-static int l_registerCommand(lua_State *L) {
-    DEBUG_PRINT(3, "[CONF] l_registerCommand\n");
-    luaL_checktype(L, 1, LUA_TNUMBER);
-    luaL_checktype(L, 2, LUA_TNUMBER);
-    luaL_checktype(L, 3, LUA_TSTRING);
-    luaL_checktype(L, 4, LUA_TSTRING);
+    int l_registerCommand(lua_State *L) {
+        DEBUG_PRINT(3, "[CONF] l_registerCommand\n");
+        luaL_checktype(L, 1, LUA_TNUMBER);
+        luaL_checktype(L, 2, LUA_TNUMBER);
+        luaL_checktype(L, 3, LUA_TSTRING);
+        luaL_checktype(L, 4, LUA_TSTRING);
 
-    // Extension::Extension(ImeKey key, unsigned int keymask, string script, string label)
-    Configuration::ImeKey key = lua_tointeger(L, 1);
-    unsigned int modifiers = lua_tointeger(L, 2);
-    string label = lua_tostring(L, 3);
-    string script = lua_tostring(L, 4);
-    // find existed same name Extension and delete it first
-    for (vector<Configuration::Extension*>::iterator it = Configuration::extensions.begin(); it != Configuration::extensions.end(); ++it) {
-        if ((*it)->getLabel() == label) {
-            // modify label
-            label = label + " (改)";
-            break;
+        // Extension::Extension(ImeKey key, unsigned int keymask, string script, string label)
+        Configuration::ImeKey key = lua_tointeger(L, 1);
+        unsigned int modifiers = lua_tointeger(L, 2);
+        string label = lua_tostring(L, 3);
+        string script = lua_tostring(L, 4);
+        // find existed same name Extension and delete it first
+        for (vector<Configuration::Extension*>::iterator it = Configuration::extensions.begin(); it != Configuration::extensions.end(); ++it) {
+            if ((*it)->getLabel() == label) {
+                // modify label
+                label = label + " (改)";
+                break;
+            }
         }
+        Configuration::extensions.push_back(new Configuration::Extension(key, modifiers, label, script));
+        return 0;
     }
-    Configuration::extensions.push_back(new Configuration::Extension(key, modifiers, label, script));
-    return 0;
-}
+
+};
 

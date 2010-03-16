@@ -7,6 +7,7 @@
 #include "Configuration.h"
 #include "defines.h"
 #include "XUtility.h"
+#include "engine.h"
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
@@ -395,6 +396,9 @@ const struct luaL_Reg LuaBinding::luaLibraryReg[] = {
     {"get_selection", LuaBinding::l_getSelection},
     {"notify", LuaBinding::l_notify},
     {"execute", LuaBinding::l_executeScript},
+    {"commit", Engine::l_commitText},
+    {"request", Engine::l_sendRequest},
+    {"register_command", Configuration::l_registerCommand},
     {NULL, NULL}
 };
 
@@ -449,6 +453,9 @@ void LuaBinding::staticInit() {
     // load config, modify static vars:
     // doublePinyinScheme, pinyinDatabases, etc
     staticLuaBinding = new LuaBinding();
+}
+
+void LuaBinding::loadStaticConfigure() {
     staticLuaBinding->doString("dofile('" PKGDATADIR G_DIR_SEPARATOR_S "config.lua')");
 
     l_applySettings(staticLuaBinding->L);
@@ -476,7 +483,7 @@ const lua_State* LuaBinding::getLuaState() const {
  */
 int LuaBinding::doString(const char* luaScript) {
     DEBUG_PRINT(3, "[LUABIND] doString(%s)\n", luaScript);
-    pthread_mutex_lock(&luaStateMutex);
+    //pthread_mutex_lock(&luaStateMutex);
     int r = luaL_dostring(L, luaScript);
     if (r) {
         fprintf(stderr, "%s\n", lua_tostring(L, -1));
@@ -485,7 +492,7 @@ int LuaBinding::doString(const char* luaScript) {
         }
         lua_pop(L, 1);
     }
-    pthread_mutex_unlock(&luaStateMutex);
+    //pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
 

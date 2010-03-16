@@ -91,10 +91,6 @@ static double maximumResponseTime = .0;
 #define ENGINE_MUTEX_LOCK if (pthread_mutex_lock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex lock fail.\n"), exit(EXIT_FAILURE);
 #define ENGINE_MUTEX_UNLOCK if (pthread_mutex_unlock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex unlock fail.\n"), exit(EXIT_FAILURE);
 
-// lua C function
-static int l_commitText(lua_State* L);
-static int l_sendRequest(lua_State* L);
-
 // init funcs
 static void engineClassInit(IBusSgpyccEngineClass *klass);
 static void engineInit(IBusSgpyccEngine *engine);
@@ -185,12 +181,14 @@ static void engineClassInit(IBusSgpyccEngineClass *klass) {
     engineClass->set_capabilities = (typeof (engineClass->set_capabilities)) & engineSetCapabilities;
     engineClass->set_cursor_location = (typeof (engineClass->set_cursor_location)) & engineSetCursorLocation;
 
-    // register Lua functions
-    LuaBinding::getStaticBinding().addFunction(l_commitText, "commit");
-    LuaBinding::getStaticBinding().addFunction(l_sendRequest, "request");
+    // register Lua functions (lua state may be locked, so move them to luaBinding)
+    // LuaBinding::getStaticBinding().addFunction(l_commitText, "commit");
+    // LuaBinding::getStaticBinding().addFunction(l_sendRequest, "request");
 }
 
 static void engineInit(IBusSgpyccEngine *engine) {
+    DEBUG_PRINT(1, "[ENGINE] engineInit\n");
+
     // init mutex
     pthread_mutexattr_t engineMutexAttr;
     pthread_mutexattr_init(&engineMutexAttr);
@@ -1122,7 +1120,7 @@ static string luaFetcher(void* voidData, const string & requestString) {
     return response;
 }
 
-static int l_commitText(lua_State * L) {
+int Engine::l_commitText(lua_State * L) {
     DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
     luaL_checkstring(L, 1);
     IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
@@ -1131,7 +1129,7 @@ static int l_commitText(lua_State * L) {
     return 0; // return 0 value to lua code
 }
 
-static int l_sendRequest(lua_State * L) {
+int Engine::l_sendRequest(lua_State * L) {
     DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
     luaL_checkstring(L, 1);
     IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;

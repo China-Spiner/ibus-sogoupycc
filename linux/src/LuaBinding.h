@@ -91,7 +91,8 @@ public:
      * load global config
      */
     static void staticInit();
-
+    static void loadStaticConfigure();
+    
     /**
      * clean up static vars.
      * close dbs.

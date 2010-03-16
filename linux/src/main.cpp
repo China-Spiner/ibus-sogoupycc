@@ -73,11 +73,13 @@ static void ibusRegister(bool callByIbus) {
 }
 
 void* staticInitThreadFunc(void*) {
+    DEBUG_PRINT(1, "[MAIN] staticInitThreadFunc\n");
     // static selection clipboard monitor
     XUtility::staticInit();
 
+    DEBUG_PRINT(1, "[MAIN] staticInitThreadFunc: load config.lua\n");
     // load global config (may contain dict loading and online update checking)
-    LuaBinding::staticInit();
+    LuaBinding::loadStaticConfigure();
     return NULL;
 }
 
@@ -116,21 +118,24 @@ int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
     // global configuration init, be first
+    LuaBinding::staticInit();
     Configuration::staticInit();
+
+    // simple argc parser
+    ibusRegister(argc > 1 && strstr(argv[1], "-i"));
 
     // other static init in background, prevent user from feeling delay
     pthread_t staticInitThread;
     pthread_attr_t threadAttr;
     pthread_attr_init(&threadAttr);
     pthread_attr_setdetachstate(&threadAttr, PTHREAD_CREATE_DETACHED);
-    pthread_attr_destroy(&threadAttr);
     if (pthread_create(&staticInitThread, &threadAttr, &staticInitThreadFunc, NULL)) {
         fprintf(stderr, "Can not create init thread!\n");
         exit(EXIT_FAILURE);
     }
+    pthread_attr_destroy(&threadAttr);
 
-    // simple argc parser
-    ibusRegister(argc > 1 && strstr(argv[1], "-i"));
+    DEBUG_PRINT(1, "[MAIN] Reaching ibus_main() ...\n");
     ibus_main();
 
     DEBUG_PRINT(1, "[MAIN] Exiting from ibus_main() ...\n");
