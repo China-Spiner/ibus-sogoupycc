@@ -1038,6 +1038,9 @@ string externalFetcher(void* data, const string & requestString) {
         totalResponseTime += requestTime;
         if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
 
+        // try read cache first if fails
+        if ((res = response).empty()) res = getRequestCache(engine, requestString);
+        
         if ((res = response).empty()) {
             // empty, means fails
             totalFailedRequestCount++;
