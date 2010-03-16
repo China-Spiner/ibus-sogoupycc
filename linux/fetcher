@@ -1,4 +1,5 @@
 #!/usr/bin/lua
+
 if not pcall(function()
 
 pcall(function() require 'luarocks.require' end)
@@ -50,3 +51,5 @@ io.write('\n')
 os.remove(keyFile)
 
 end) then io.write('\n') end
+
+-- ibus-sogoupycc-fetcher-end --
