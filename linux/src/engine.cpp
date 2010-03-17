@@ -814,6 +814,9 @@ static void engineDisable(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(1, "[ENGINE] Disable\n");
     engine->enabled = false;
     engineUpdateProperties(engine);
+    // cancel all requests
+    engine->cloudClient->removeFirstRequest(INT_MAX);
+    engineUpdatePreedit(engine);
 }
 
 static void engineSetCursorLocation(IBusSgpyccEngine *engine, gint x, gint y, gint w, gint h) {
@@ -995,7 +998,6 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
 
     // update properties
     if (requestCount - finishedCount <= 0 && engine->requesting) {
-
         engine->requesting = false;
         engineUpdateProperties(engine);
     }

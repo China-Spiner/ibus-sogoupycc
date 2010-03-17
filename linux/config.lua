@@ -14,7 +14,7 @@ assert(ime.set_double_pinyin_scheme{
 -- 如果存在，使用用户的请求脚本
 local user_fetcher = ime.USERCACHEDIR..'/fetcher'
 local file = io.open(user_fetcher, 'r')
-if file then file:close() ime.fetcher = user_fetcher end
+if file then file:close() ime.fetcher_path = user_fetcher end
 
 -- 如果存在，则加载用户配置文件
 local user_config = ime.USERCONFIGDIR..'/config.lua'
@@ -38,6 +38,6 @@ if not do_not_update_fetcher then
 		fetcher_file:write(ret)
 		fetcher_file:close()
 		os.execute("chmod +x '"..user_fetcher.."'")
-		ime.fetcher = user_fetcher
+		ime.fetcher_path = user_fetcher
 	end
 end
