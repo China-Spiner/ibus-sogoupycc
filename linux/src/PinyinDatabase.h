@@ -2,18 +2,8 @@
  * File:   PinyinDatabase.h
  * Author: WU Jun
  *
- * March 9, 2010
- *  0.1.3 limit query length
- * March 2, 2010
- *  0.1.2
- * February 28, 2010
- *  0.1.1 major bugs fixed
- *  fix 'ing', 'iang' not regonised issue
- * February 27, 2010
- *  0.1.0 first release
- * February 27, 2010
- *  created. aim to implement simple reader to access ibus-pinyin 1.2.99 seriese main databases
- *  one PinyinDatabase links to one database file
+ * this class bind to a ibus-pinyin 1.2.9 compatible database
+ * providing query api.
  */
 
 #ifndef _PINYINDATABASE_H

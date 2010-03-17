@@ -2,8 +2,6 @@
  * File:   PinyinCloudClient.h
  * Author: WU Jun <quark@lihdd.net>
  *
- * reimplement original c code (sogoupycc.{c,h})
- * 
  * this class mantains multi-thread requests to remote server.
  * a request is done via callback function (external script)
  * for flexibility.

@@ -2,11 +2,7 @@
  * File:   LuaBinding.cpp
  * Author: WU Jun <quark@lihdd.net>
  *
- * March 13, 2010
- *  add PunctuationMap, ImeKey
- * March 12, 2010
- *  created. aim to maintain global configuration.
- *  and move all non-status session config global
+ * maintain global settings
  */
 
 #ifndef _CONFIGURATION_H
@@ -115,6 +111,7 @@ namespace Configuration {
     extern bool showNotification;
     extern bool preRequest;
     extern bool showCachedInPreedit;
+    extern bool staticNotification;
 
     // pre request timeout
     extern double preRequestTimeout;

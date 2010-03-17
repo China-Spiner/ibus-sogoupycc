@@ -248,12 +248,11 @@ static void engineInit(IBusSgpyccEngine *engine) {
 
     // properties
     engine->propList = ibus_prop_list_new();
-    engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
-    engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
-    engine->extensionMenuProp = ibus_property_new("extensionMenu", PROP_TYPE_MENU, NULL, PKGDATADIR "/icons/extensions.png", NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
-    ibus_property_set_sub_props(engine->extensionMenuProp, Configuration::extensionList);
+    engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, ibus_text_new_from_static_string("中英文模式切换"), TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, ibus_text_new_from_static_string("云服务器请求状态"), TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    engine->extensionMenuProp = ibus_property_new("extensionMenu", PROP_TYPE_MENU, NULL, PKGDATADIR "/icons/extensions.png", ibus_text_new_from_static_string("用户扩展"), TRUE, TRUE, PROP_STATE_INCONSISTENT, Configuration::extensionList);
 
-    // extension sub props    
+    // extension sub props
     ibus_prop_list_append(engine->propList, engine->engModeProp);
     ibus_prop_list_append(engine->propList, engine->requestingProp);
     ibus_prop_list_append(engine->propList, engine->extensionMenuProp);

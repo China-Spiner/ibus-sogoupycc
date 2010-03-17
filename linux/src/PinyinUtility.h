@@ -2,19 +2,8 @@
  * File:   PinyinUtility.h
  * Author: WU Jun <quark@lihdd.net>
  *
- * March 13, 2010
- *  split out DoublePinyinScheme
- * February 28, 2010
- *  0.1.1 major bugs fixed
- * February 27, 2010
- *  0.1.0 first release
- * February 19, 2010
- *  extended to PinyinUtility. originally DoublePinyin Utility.
- * February 6, 2010
- *  created. reimplement original c code (doublepinyin_scheme.{c,h})
- *  this class provides interface to build double pinyin lookup map from
- *  key map and to check or convert double pinyin.
- *  as designed, it should be instantiated once by LuaIbusBinding class.
+ * provide basic api to convert / check pinyin, chinese characters
+ * built-in gb2312 characters
  */
 
 #ifndef _PINYINUTILITY_H

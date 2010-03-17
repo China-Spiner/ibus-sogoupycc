@@ -96,6 +96,7 @@ namespace XUtility {
 
     bool showNotify(const char* summary, const char* body, const char* iconPath) {
         DEBUG_PRINT(2, "[XUTIL] showNotify(%s, %s, %s)\n", summary, body, iconPath);
+        if (Configuration::staticNotification) return showStaticNotify(summary, body, iconPath);
         if (!notifyInited) return false;
         if (summary == NULL || summary[0] == '\0') return false;
         NotifyNotification *notify = notify_notification_new(summary, body, iconPath, NULL);

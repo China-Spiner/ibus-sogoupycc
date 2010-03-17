@@ -2,8 +2,7 @@
  * File:   DoublePinyinScheme.h
  * Author: WU Jun <quark@lihdd.net>
  *
- * March 13, 2010
- *  created. split from PinyinUtility
+ * double pinyin scheme, query
  */
 
 #ifndef _DOUBLEPINYINSCHEME_H

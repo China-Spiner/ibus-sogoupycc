@@ -2,8 +2,8 @@
  * File:   PinyinSequence.h
  * Author: WU Jun <quark@lihdd.net>
  *
- * March 13, 2010
- *  created.
+ * convert between vector<string>("a", "ba") with string("a ba")
+ * also split recognised chinese characters
  */
 
 #ifndef _PINYINSEQUENCE_H

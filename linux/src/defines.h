@@ -1,6 +1,8 @@
 /* 
  * File:   defines.h
  * Author: WU Jun <quark@lihdd.net>
+ *
+ * pkg path and debug macro defines
  */
 
 #ifndef _DEFINES_H

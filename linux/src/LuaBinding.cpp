@@ -79,6 +79,7 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::pageUpKey.readFromLua(lb, "page_up_key");
 
     // bools
+    Configuration::staticNotification = lb.getValue("static_notification", Configuration::staticNotification);
     Configuration::useDoublePinyin = lb.getValue("use_double_pinyin", Configuration::useDoublePinyin);
     Configuration::strictDoublePinyin = lb.getValue("strict_double_pinyin", Configuration::strictDoublePinyin);
     Configuration::startInEngMode = lb.getValue("start_in_eng_mode", Configuration::startInEngMode);

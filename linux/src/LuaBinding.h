@@ -2,24 +2,7 @@
  * File:   LuaBinding.h
  * Author: WU Jun <quark@lihdd.net>
  *
- * March 13, 2010
- *  read ime.punc_map table struct natively
- * March 12, 2010
- *  global conf moved from engine.cpp
- *  many per-session settings go global
- * March 9, 2010
- *  0.1.3 global static init run first
- * March 2, 2010
- *  0.1.2
- * February 28, 2010
- *  0.1.1 major bugs fixed
- *  do not unload dbs in ~LuaBinding
- * February 27, 2010
- *  0.1.0 first release
- * February 9, 2010
- *  created.
- *  i move much code to external lua configure script to gain flexibility.
- *  as designed, it should be instantiated once by each ibus engine.
+ * communicate with lualib
  */
 
 #ifndef _LUABINDING_H

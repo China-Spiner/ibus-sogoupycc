@@ -2,18 +2,7 @@
  * File:   engine.h
  * Author: WU Jun <quark@lihdd.net>
  *
- * March 12, 2010
- *  use global static luaBinding. All settings go global
- * March 9, 2010
- *  0.1.3 separate lua global / session init
- * March 2, 2010
- *  0.1.2
- * February 28, 2010
- *  0.1.1 major bugs fixed
- * February 27, 2010
- *  0.1.0 first release
- * November 3, 2009
- *  created
+ * defines and exported lua C functions of engine.
  */
 
 #ifndef _ENGINE_H
