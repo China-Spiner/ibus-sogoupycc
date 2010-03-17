@@ -35,7 +35,11 @@ int LuaBinding::l_getSelection(lua_State * L) {
 
 int LuaBinding::l_notify(lua_State * L) {
     DEBUG_PRINT(2, "[LUABIND] l_notify\n");
-    luaL_checktype(L, 1, LUA_TSTRING);
+    if (lua_type(L, 1) == LUA_TNONE) {
+        luaL_error(L, "notify: require parameters.");
+        lua_pushboolean(L, false);
+        return 1;
+    }
     const char* summary = lua_tostring(L, 1);
     const char* body = lua_type(L, 2) == LUA_TSTRING ? lua_tostring(L, 2) : NULL;
     const char* iconPath = lua_type(L, 3) == LUA_TSTRING ? lua_tostring(L, 3) : (PKGDATADIR "/icons/extensions.png");

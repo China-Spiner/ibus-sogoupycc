@@ -1120,6 +1120,7 @@ static string luaFetcher(void* voidData, const string & requestString) {
 }
 
 int Engine::l_commitText(lua_State * L) {
+    lua_tostring(L, 1);
     DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
     luaL_checkstring(L, 1);
     IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
@@ -1129,8 +1130,8 @@ int Engine::l_commitText(lua_State * L) {
 }
 
 int Engine::l_sendRequest(lua_State * L) {
-    DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
     luaL_checkstring(L, 1);
+    DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
     IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
     if (!engine) return 0;
 
