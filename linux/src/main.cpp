@@ -84,6 +84,12 @@ void* staticInitThreadFunc(void*) {
 }
 
 int main(int argc, char *argv[]) {
+    // redirect output ( for debugging )
+    //if (getenv("SGPYZCC_REDIRECT_OUTPUT")) {
+    // freopen("/tmp/.sgpycc.out", "w", stdout);
+    // freopen("/tmp/.sgpycc.err", "w", stderr);
+    //}
+
     // version
     if (argc > 1 && strstr(argv[1], "-v")) {
         printf("ibus-sogoupycc version: %s\n", VERSION);
@@ -101,12 +107,6 @@ int main(int argc, char *argv[]) {
     }
 
     if ((argc > 1 && strstr(argv[1], "-d")) || getenv("DEBUG")) globalDebugLevel = 10;
-
-    // redirect output
-    if (getenv("SGPYZCC_REDIRECT_OUTPUT")) {
-        freopen("/tmp/.sgpycc.out", "w", stdout);
-        freopen("/tmp/.sgpycc.err", "w", stderr);
-    }
 
     // call dbus and glib, gdk multi thread init functions
     g_thread_init(NULL);

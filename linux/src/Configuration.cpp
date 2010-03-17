@@ -163,7 +163,7 @@ namespace Configuration {
             case LUA_TNUMBER:
             {
                 keys.clear();
-                unsigned key = luaBinding.getValue(varName.c_str(), (unsigned int) IBUS_VoidSymbol);
+                unsigned int key = (unsigned int)luaBinding.getValue(varName.c_str(), (int) IBUS_VoidSymbol);
                 keys.insert(key);
                 label = string("") + (char) key;
                 return true;
