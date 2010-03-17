@@ -36,7 +36,7 @@ public:
      */
     string getValue(const char* varName, const char* defaultValue = "", const char* libName = LIB_NAME);
     int getValue(const char* varName, const int defaultValue = -1, const char* libName = LIB_NAME);
-    unsigned int getValue(const char* varName, const unsigned int defaultValue, const char* libName = LIB_NAME);
+    size_t getValue(const char* varName, const size_t defaultValue, const char* libName = LIB_NAME);
     bool getValue(const char* varName, const bool defaultValue = false, const char* libName = LIB_NAME);
     double getValue(const char* varName, const double defaultValue, const char* libName = LIB_NAME);
     int getValueType(const char* varName, const char* libName = LIB_NAME);

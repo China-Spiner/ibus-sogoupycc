@@ -669,7 +669,7 @@ int LuaBinding::getValue(const char* varName, const int defaultValue, const char
     return r;
 }
 
-unsigned int LuaBinding::getValue(const char* varName, const unsigned int defaultValue, const char* libName) {
+size_t LuaBinding::getValue(const char* varName, const size_t defaultValue, const char* libName) {
     DEBUG_PRINT(5, "[LUABIND] getValue(unsigned int): %s.%s\n", libName, varName);
     return getValue(varName, (int) defaultValue, libName);
 }

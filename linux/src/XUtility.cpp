@@ -8,6 +8,7 @@
 #include <gtk/gtk.h>
 #include <libnotify/notify.h>
 #include <libnotify/notification.h>
+#include "Configuration.h"
 #include "defines.h"
 
 
