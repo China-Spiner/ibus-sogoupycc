@@ -47,7 +47,7 @@ namespace Configuration {
     bool showNotification = true;
     bool preRequest = true;
     bool showCachedInPreedit = true;
-    bool staticNotification = true;
+    bool staticNotification = false;
 
     // pre request timeout
     double preRequestTimeout = 1.;
