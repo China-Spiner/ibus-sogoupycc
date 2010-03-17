@@ -2,11 +2,7 @@
  * File:   main.c
  * Author: WU Jun <quark@lihdd.net>
  *
- *
- * March 12, 2010
- *  move static init to background.
- * November 3, 2009
- *  created.
+ * ibus-sogoupycc main file
  */
 
 // use cc -pthread instead:
@@ -136,6 +132,7 @@ int main(int argc, char *argv[]) {
     pthread_attr_destroy(&threadAttr);
 
     DEBUG_PRINT(1, "[MAIN] Reaching ibus_main() ...\n");
+    usleep(100);
     ibus_main();
 
     DEBUG_PRINT(1, "[MAIN] Exiting from ibus_main() ...\n");

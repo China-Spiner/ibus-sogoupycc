@@ -1041,7 +1041,8 @@ string externalFetcher(void* data, const string & requestString) {
         if ((res = response).empty()) {
             // empty, means fails
             totalFailedRequestCount++;
-            res = requestString;
+            // try partial convert
+            res = particalConvert(engine, requestString);
         } else {
             if (Configuration::writeRequestCache && requestString != res) {
                 writeRequestCache(engine, requestString, res);
