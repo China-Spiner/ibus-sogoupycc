@@ -163,7 +163,7 @@ namespace Configuration {
             case LUA_TNUMBER:
             {
                 keys.clear();
-                unsigned int key = (unsigned int)luaBinding.getValue(varName.c_str(), (int) IBUS_VoidSymbol);
+                unsigned int key = (unsigned int) luaBinding.getValue(varName.c_str(), (int) IBUS_VoidSymbol);
                 keys.insert(key);
                 label = string("") + (char) key;
                 return true;
@@ -359,6 +359,5 @@ namespace Configuration {
         Configuration::extensions.push_back(new Configuration::Extension(key, modifiers, label, script));
         return 0;
     }
-
 };
 
