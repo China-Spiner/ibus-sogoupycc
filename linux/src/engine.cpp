@@ -1119,6 +1119,8 @@ static string luaFetcher(void* voidData, const string & requestString) {
     string response;
     data->engine->luaBinding->callLuaFunction(data->luaFuncName.c_str(), "s>s", requestString.c_str(), &response);
     delete (LuaFuncData*) data;
+    // fails?
+    if (response.empty()) response = requestString;
     return response;
 }
 

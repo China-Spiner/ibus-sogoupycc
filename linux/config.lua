@@ -2,7 +2,7 @@
 -- 详细信息请参考 http://code.google.com/p/ibus-sogoupycc/wiki/Configuration
 
 -- 加载 luasocket 模块
-local http, url = require('socket.http'), require('socket.url')
+http, url = require('socket.http'), require('socket.url')
 
 assert(ime.set_double_pinyin_scheme{
 -- 自然码方案 (其他双拼方案参考 http://code.google.com/p/ibus-sogoupycc/wiki/Configuration)

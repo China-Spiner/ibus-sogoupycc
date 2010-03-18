@@ -219,7 +219,7 @@ namespace Configuration {
     }
 
     void Extension::execute() const {
-        LuaBinding::getStaticBinding().doString(script.c_str());
+        LuaBinding::getStaticBinding().doString(script.c_str(), true);
     }
 
     bool Extension::matchKey(unsigned int keyval, unsigned keymask) const {

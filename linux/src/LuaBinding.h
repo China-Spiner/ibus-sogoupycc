@@ -46,7 +46,7 @@ public:
     void setValue(const char* varName, const bool value, const char* libName = LIB_NAME);
 
     virtual ~LuaBinding();
-    int doString(const char* luaScript);
+    int doString(const char* luaScript, bool locked = false);
 
 
     /**

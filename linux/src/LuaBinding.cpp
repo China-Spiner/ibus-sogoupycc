@@ -486,10 +486,10 @@ const lua_State* LuaBinding::getLuaState() const {
 /**
  * return 0 if no error
  */
-int LuaBinding::doString(const char* luaScript) {
+int LuaBinding::doString(const char* luaScript, bool locked) {
     DEBUG_PRINT(3, "[LUABIND] doString(%s)\n", luaScript);
-    //pthread_mutex_lock(&luaStateMutex);
-    int r = luaL_dostring(L, luaScript);
+    if (locked) pthread_mutex_lock(&luaStateMutex);
+    int r = (luaL_loadstring(L, luaScript) || lua_pcall(L, 0, 0, 0));
     if (r) {
         fprintf(stderr, "%s\n", lua_tostring(L, -1));
         if (Configuration::showNotification) {
@@ -497,7 +497,7 @@ int LuaBinding::doString(const char* luaScript) {
         }
         lua_pop(L, 1);
     }
-    //pthread_mutex_unlock(&luaStateMutex);
+    if (locked) pthread_mutex_unlock(&luaStateMutex);
     return r;
 }
 
