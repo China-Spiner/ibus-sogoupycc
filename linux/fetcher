@@ -4,10 +4,11 @@ if not pcall(function()
 
 http = require('socket.http')
 url = require('socket.url')
-
 http.USERAGENT = "ibus-sogoupycc"
 keyFile = '/tmp/.sogoucloud-key'
 
+debug = (arg[2] == 'd')
+if debug then arg[2] = nil end
 
 local py, timeout, retry, key = arg[1] or 't', arg[2]
 py = py:gsub("[^a-z]", '')
@@ -31,7 +32,7 @@ function try_convert(tail, tail_len)
 	tail_len = tail_len or 0
 	if not timeout then http.TIMEOUT, retry = 0.3, 20 else http.TIMEOUT, retry = timeout + 0, 1 end
 	for attempt = 1, retry do
-		-- print(attempt, http.TIMEOUT )
+		if debug then print(attempt, http.TIMEOUT ) end
 		local ret = http.request('http://web.pinyin.sogou.com/api/py?key='..key..'&query='..py..py_tail)
 		local res = ret and ret:match('ime_callback%("(.-)"')
 		if res then
@@ -51,8 +52,9 @@ function try_convert(tail, tail_len)
 end
 
 -- try various tails
-for _, v in pairs{{'', 0}, {'a', 1}, {'ne', 1}, {'le', 1}, {'shi', 1}, {'hao ma', 2}, {'cai hao', 2}, {'hua shuo', 2}} do
+for _, v in pairs{{'', 0}, {'ne', 1}, {'a', 1}, {'le', 1}, {'ma', 1}, {'zhe yang de', 3}, {'zhen de ma', 3}, {'ting hao de', 3}, {'shui xiang xin', 3}} do
 	local r = try_convert(v[1], v[2])
+	if debug then print('result:', r) end
 	if r == 3 then break end -- timeout, network problem
 	if r == 1 then return end -- success
 	-- if r == 2, just go on retrying...
