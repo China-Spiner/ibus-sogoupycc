@@ -52,9 +52,9 @@ function try_convert(tail, tail_len)
 end
 
 -- try various tails
-for _, v in pairs{{'', 0}, {'ne', 1}, {'a', 1}, {'le', 1}, {'ma', 1}, {'zhe yang de', 3}, {'zhen de ma', 3}, {'ting hao de', 3}, {'shui xiang xin', 3}, {'zhe shi zhen de ma', 5}, {'na shi bu ke neng de', 6}} do
+for _, v in pairs{{'', 0}, {'ne', 1}, {'a', 1}, {'le', 1}, {'ma', 1}, {'zhe', 1}, {'na', 1}, {'zhe yang de', 3}, {'zhen de ma', 3}, {'ting hao de', 3}, {'shui xiang xin', 3}, {'zhe shi zhen de ma', 5}, {'na shi bu ke neng de', 6}, {'ni zhi dao ma', 4}, {'ni bu zhi dao', 4}, {'bie wang le a', 4}} do
 	local r = try_convert(v[1], v[2])
-	if debug then print('result:', r) end
+	if debug then print(v[1], 'result:', r) end
 	if r == 3 then break end -- timeout, network problem
 	if r == 1 then return end -- success
 	-- if r == 2, just go on retrying...
