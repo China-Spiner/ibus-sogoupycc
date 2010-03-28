@@ -207,6 +207,9 @@ namespace Configuration {
         this->script = script;
         this->label = label;
         this->prop = ibus_property_new((string(".") + label).c_str(), PROP_TYPE_NORMAL, ibus_text_new_from_string(label.c_str()), NULL, NULL, TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+#if IBUS_CHECK_VERSION(1, 3, 0)
+        g_object_ref_sink(this->prop);
+#endif
         ibus_prop_list_append(extensionList, this->prop);
     }
 
@@ -270,6 +273,9 @@ namespace Configuration {
         tableLabelKeys.push_back('f');
 
         extensionList = ibus_prop_list_new();
+#if IBUS_CHECK_VERSION(1, 3, 0)
+        g_object_ref_sink(extensionList);
+#endif
     }
 
     void addConstantsToLua(LuaBinding& luaBinding) {

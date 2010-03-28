@@ -15,6 +15,7 @@
 #include "XUtility.h"
 #include "Configuration.h"
 
+
 typedef struct _IBusSgpyccEngine IBusSgpyccEngine;
 typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
 
@@ -131,6 +132,12 @@ static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSri
 // paritical convert (using cache)
 static const string particalConvert(IBusSgpyccEngine* engine, const string& pinyins);
 
+inline void ibus_object_unref(gpointer object) {
+#if !IBUS_CHECK_VERSION(1, 3, 0)
+    g_object_unref(G_OBJECT(text));
+#endif
+}
+
 // entry function, indeed
 
 GType ibusSgpyccEngineGetType(void) {
@@ -225,6 +232,9 @@ static void engineInit(IBusSgpyccEngine *engine) {
     // lookup table
     engine->lookupTableLabelCount = Configuration::tableLabelKeys.size();
     engine->table = ibus_lookup_table_new(engine->lookupTableLabelCount, 0, 0, 0);
+#if IBUS_CHECK_VERSION(1, 3, 0)
+    g_object_ref_sink(engine->table);
+#endif
 
     // ibus_lookup_table_set_orientation() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
     // and since ibus-1.2.0.20090927 and ibus-1.2.0.20100111 use same version defines, program can not tell
@@ -233,7 +243,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     for (size_t i = 0; i < engine->lookupTableLabelCount; i++) {
         IBusText* text = ibus_text_new_from_printf("%s", Configuration::tableLabelKeys[i].getLabel().c_str());
         ibus_lookup_table_append_label(engine->table, text);
-        g_object_unref(text);
+        ibus_object_unref(text);
     }
 
     if (engine->lookupTableLabelCount <= 0) {
@@ -248,9 +258,17 @@ static void engineInit(IBusSgpyccEngine *engine) {
 
     // properties
     engine->propList = ibus_prop_list_new();
+
     engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, ibus_text_new_from_static_string("中英文模式切换"), TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, ibus_text_new_from_static_string("云服务器请求状态"), TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     engine->extensionMenuProp = ibus_property_new("extensionMenu", PROP_TYPE_MENU, NULL, PKGDATADIR "/icons/extensions.png", ibus_text_new_from_static_string("用户扩展"), TRUE, TRUE, PROP_STATE_INCONSISTENT, Configuration::extensionList);
+
+#if IBUS_CHECK_VERSION(1, 3, 0)
+    g_object_ref_sink(engine->propList);
+    g_object_ref_sink(engine->engModeProp);
+    g_object_ref_sink(engine->requestingProp);
+    g_object_ref_sink(engine->extensionMenuProp);
+#endif
 
     // extension sub props
     ibus_prop_list_append(engine->propList, engine->engModeProp);
@@ -398,10 +416,10 @@ engineProcessKeyEventStart:
                     for (int i = 0; i < l; ++i) {
                         IBusText *candidateCharacter = ibus_text_new_from_unichar(g_utf8_get_char(utf8char));
                         engineAppendLookupTable(engine, candidateCharacter);
-                        g_object_unref(candidateCharacter);
+                        ibus_object_unref(candidateCharacter);
                         if (i < l - 1) utf8char = g_utf8_next_char(utf8char);
                     }
-                    g_object_unref(candidateCharacters);
+                    ibus_object_unref(candidateCharacters);
                     engine->tablePageNumber = 0;
                     res = TRUE;
                 } else {
@@ -458,7 +476,7 @@ engineProcessKeyEventStart:
                                         ibus_attr_list_append(candidate->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, 0, ibus_text_get_length(candidate)));
                                     }
                                     engineAppendLookupTable(engine, candidate);
-                                    g_object_unref(candidate);
+                                    ibus_object_unref(candidate);
                                 }
                             }
                         }
@@ -473,7 +491,7 @@ engineProcessKeyEventStart:
                                     ibus_attr_list_append(candidate->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, 0, ibus_text_get_length(candidate)));
                                 }
                                 engineAppendLookupTable(engine, candidate);
-                                g_object_unref(candidate);
+                                ibus_object_unref(candidate);
                             }
                         }
                         break;
@@ -496,7 +514,7 @@ engineProcessKeyEventStart:
                             if (cInserted.find(candidate) == cInserted.end()) {
                                 IBusText* candidateText = ibus_text_new_from_string(it->second.c_str());
                                 engineAppendLookupTable(engine, candidateText);
-                                g_object_unref(candidateText);
+                                ibus_object_unref(candidateText);
                                 cInserted.insert(it->second);
                             }
                         }
@@ -504,7 +522,7 @@ engineProcessKeyEventStart:
                             // put a dummy one
                             IBusText* dummyCandidate = ibus_text_new_from_string("?");
                             engineAppendLookupTable(engine, dummyCandidate);
-                            g_object_unref(dummyCandidate);
+                            ibus_object_unref(dummyCandidate);
                         }
                         break;
                     }
@@ -513,11 +531,11 @@ engineProcessKeyEventStart:
             if (engine->candicateCount == 0) {
                 IBusText* dummyCandidate = ibus_text_new_from_string("-");
                 engineAppendLookupTable(engine, dummyCandidate);
-                g_object_unref(dummyCandidate);
+                ibus_object_unref(dummyCandidate);
             }
             IBusText* text = ibus_text_new_from_string((*engine->correctings)[0].c_str());
             ibus_engine_update_auxiliary_text((IBusEngine*) engine, text, TRUE);
-            g_object_unref(text);
+            ibus_object_unref(text);
             engine->tablePageNumber = 0;
             res = TRUE;
         }
@@ -910,6 +928,9 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     size_t preeditLen = 0;
     IBusAttrList *textAttrList = ibus_attr_list_new();
 
+#if IBUS_CHECK_VERSION(1, 3, 0)
+    g_object_ref_sink(textAttrList);
+#endif
     for (size_t i = 0; i < requestCount; ++i) {
         size_t currReqLen;
         const PinyinCloudRequest& request = engine->cloudClient->getRequest(i);
@@ -941,7 +962,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
         IBusText *commitText = ibus_text_new_from_printf("%s", commitString.c_str());
         if (commitText) {
             ibus_engine_commit_text((IBusEngine *) engine, commitText);
-            g_object_unref(G_OBJECT(commitText));
+            ibus_object_unref(commitText);
         } else {
             fprintf(stderr, "[ERROR] can not create commitText.\n");
         }
@@ -989,7 +1010,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
         ibus_engine_update_preedit_text((IBusEngine *) engine, preeditText, preeditLen, TRUE);
     }
     // remember to unref text
-    g_object_unref(preeditText);
+    ibus_object_unref(preeditText);
 
     engine->cloudClient->readUnlock();
 
@@ -1039,7 +1060,7 @@ string externalFetcher(void* data, const string & requestString) {
 
         // try read cache first if fails
         if ((res = response).empty()) res = getRequestCache(engine, requestString);
-        
+
         if ((res = response).empty()) {
             // empty, means fails
             totalFailedRequestCount++;
@@ -1152,7 +1173,7 @@ int Engine::l_sendRequest(lua_State * L) {
     // delete selection
     IBusText *emptyText = ibus_text_new_from_static_string("");
     ibus_engine_commit_text((IBusEngine*) engine, emptyText);
-    g_object_unref(emptyText);
+    ibus_object_unref(emptyText);
     engineUpdatePreedit(engine);
     return 0; // return 0 value to lua code
 }
