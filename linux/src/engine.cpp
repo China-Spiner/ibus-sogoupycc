@@ -603,6 +603,7 @@ engineProcessKeyEventStart:
                         *engine->activePreedit = "";
                         if (Configuration::showNotification) XUtility::showStaticNotify("已切换到英文模式", NULL, PKGDATADIR "/icons/engmode-on.png");
                     } else {
+                        engine->lastInputIsChinese = true;
                         if (Configuration::showNotification) XUtility::showStaticNotify("已切换到中文模式", NULL, PKGDATADIR "/icons/engmode-off.png");
                     }
                     engineUpdateProperties(engine);
