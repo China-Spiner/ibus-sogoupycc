@@ -140,7 +140,7 @@ static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string&
 
 inline void ibus_object_unref(gpointer object) {
 #if !IBUS_CHECK_VERSION(1, 3, 0)
-    g_object_unref(G_OBJECT(text));
+    g_object_unref(G_OBJECT(object));
 #endif
 }
 
