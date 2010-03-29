@@ -48,12 +48,12 @@ function try_convert(tail, tail_len)
 			end
 		end
 		http.TIMEOUT = http.TIMEOUT * 1.8
-		if http.TIMEOUT > 18 then break end
 		if timeout and timeout < 0 and os.time() - start_time > -timeout then
 			-- force quit
 			io.write('\n')
-			return
+			return 4
 		end
+		if http.TIMEOUT > 18 then break end
 	end
 	return 3
 end
@@ -64,6 +64,7 @@ for _, v in pairs{{'', 0}, {'ne', 1}, {'a', 1}, {'le', 1}, {'ma', 1}, {'zhe', 1}
 	if debug then print(v[1], 'result:', r) end
 	if r == 3 then break end -- timeout, network problem
 	if r == 1 then return end -- success
+	if r == 4 then return end -- global timeout
 	-- if r == 2, just go on retrying...
 end
 

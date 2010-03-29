@@ -67,7 +67,7 @@ namespace Configuration {
 
     // punctuations
     PunctuationMap punctuationMap;
-    string autoWidthPunctuations = ".,?:";
+    string autoWidthPunctuations = ".,";
 
     // multi tone chineses
     size_t multiToneLimit = 2;
