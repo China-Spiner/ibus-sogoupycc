@@ -10,27 +10,28 @@ keyFile = '/tmp/.sogoucloud-key'
 debug = (arg[2] == 'd')
 if debug then arg[2] = nil end
 
-local py, timeout, retry, key = arg[1] or 't', arg[2]
+local py, timeout, retry, key = arg[1] or 't', tonumber(arg[2])
 py = py:gsub("[^a-z]", '')
 
-function refreshKey()
+function refresh_key()
 	local ret = http.request('http://web.pinyin.sogou.com/web_ime/patch.php') or ''
 	key = ret:match('"(.-)"') or ''
 	if #key > 0 then local file = io.open(keyFile, 'w') file:write(key) file:close() end
 end
 
-if not timeout then http.TIMEOUT, retry = 0.3, 7 else http.TIMEOUT, retry = timeout + 0, 1 end
+start_time = os.time()
+if timeout and timeout > 0 then http.TIMEOUT, retry = timeout + 0, 1 else http.TIMEOUT, retry = 0.3, 7 end
 
 -- get key
 local file = io.open(keyFile, 'r')
 if file then key = file:read("*line") or '' file:close() end
 
-for attempt = 1, retry do if (not key) or (#key == 0) then http.TIMEOUT = http.TIMEOUT * 1.5 refreshKey() else break end end
+for attempt = 1, retry do if (not key) or (#key == 0) then http.TIMEOUT = http.TIMEOUT * 1.5 refresh_key() else break end end
 
 function try_convert(tail, tail_len)
 	local py_tail = (tail or ''):gsub(' ','')
 	tail_len = tail_len or 0
-	if not timeout then http.TIMEOUT, retry = 0.3, 20 else http.TIMEOUT, retry = timeout + 0, 1 end
+	if timeout and timeout > 0 then http.TIMEOUT, retry = timeout + 0, 1 else http.TIMEOUT, retry = 0.3, 20 end
 	for attempt = 1, retry do
 		if debug then print(attempt, http.TIMEOUT ) end
 		local ret = http.request('http://web.pinyin.sogou.com/api/py?key='..key..'&query='..py..py_tail)
@@ -38,6 +39,7 @@ function try_convert(tail, tail_len)
 		if res then
 			local content = url.unescape(res):match('(.-)：')
 			if content and #content > 2 then
+				-- test usage: math.randomseed(os.time()) socket.sleep(math.random(20)) 
 				io.write(content:sub(1, #content - 3 * tail_len))
 				return 1
 			else
@@ -47,6 +49,11 @@ function try_convert(tail, tail_len)
 		end
 		http.TIMEOUT = http.TIMEOUT * 1.8
 		if http.TIMEOUT > 18 then break end
+		if timeout and timeout < 0 and os.time() - start_time > -timeout then
+			-- force quit
+			io.write('\n')
+			return
+		end
 	end
 	return 3
 end
