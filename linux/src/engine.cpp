@@ -805,7 +805,7 @@ engineProcessKeyEventStart:
                         if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
                         else preRequestString = ps.toString(0, ps.size() - 1);
 
-                        engine->cloudClient->preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                        PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                     }
                     // now inputing chinses
                     *engine->lastActivePreedit = *engine->activePreedit;
