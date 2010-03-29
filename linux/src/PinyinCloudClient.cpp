@@ -22,6 +22,8 @@ struct RequestThreadData {
     PinyinCloudClient* client;
 };
 
+bool PinyinCloudClient::preRequestBusy = false;
+
 void* requestThreadFunc(void *data) {
     DEBUG_PRINT(2, "[CLOUD] enter request thread\n");
     PinyinCloudRequest *request = ((RequestThreadData*) data)->newRequest;
@@ -90,19 +92,22 @@ void* preRequestThreadFunc(void *data) {
 
     delete request;
     DEBUG_PRINT(3, "[CLOUD.PREREQ] Exiting...\n");
+    PinyinCloudClient::preRequestBusy = false;
     pthread_exit(0);
 }
 
 void PinyinCloudClient::preRequest(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam) {
     // ignore empty string request
     if (requestString.empty()) return;
-
+    if (preRequestBusy) return;
+    preRequestBusy = true;
+    
     DEBUG_PRINT(3, "[CLOUD] new preRequest: %s\n", requestString.c_str());
     PinyinCloudRequest *request = new PinyinCloudRequest;
     request->requestString = requestString;
     request->callbackFunc = callbackFunc;
     request->callbackParam = callbackParam;
-    request->requestId = (nextRequestId++);
+    request->requestId = 0;
     request->responsed = false;
     request->fetchFunc = fetchFunc;
     request->fetchParam = fetchParam;

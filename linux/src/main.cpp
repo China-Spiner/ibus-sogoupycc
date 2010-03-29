@@ -89,6 +89,7 @@ int main(int argc, char *argv[]) {
     //PinyinDatabase db("/tmp/o.db");
     //printf("%s\n", db.greedyConvert(PinyinSequence("wo men kan dao le ni zai na li gong zuo")).c_str());
     //return 0;
+    globalDebugLevel = 3;
     
     // version
     if (argc > 1 && strstr(argv[1], "-v")) {

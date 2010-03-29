@@ -17,8 +17,6 @@
 #include "XUtility.h"
 #include "Configuration.h"
 
-#define WEAK_CACHE_PREFIX "._."
-
 typedef struct _IBusSgpyccEngine IBusSgpyccEngine;
 typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
 
@@ -467,6 +465,7 @@ engineProcessKeyEventStart:
                 else dbOrder = "2";
             }
 
+            set<string> candidateSet;
             for (const char *dbo = dbOrder.c_str(); *dbo; ++dbo)
                 switch (*dbo) {
                     case '2':
@@ -511,9 +510,12 @@ engineProcessKeyEventStart:
                         // request cache
                         vector<string> partialCaches = getPartialCacheConverts(engine, engine->correctings->toString());
                         for (vector<string>::iterator it = partialCaches.begin(); it != partialCaches.end(); ++it) {
-                            IBusText* candidateText = ibus_text_new_from_string(it->c_str());
-                            engineAppendLookupTable(engine, candidateText);
-                            ibus_object_unref(candidateText);
+                            if (candidateSet.find(*it) == candidateSet.end()) {
+                                candidateSet.insert(*it);
+                                IBusText* candidateText = ibus_text_new_from_string(it->c_str());
+                                engineAppendLookupTable(engine, candidateText);
+                                ibus_object_unref(candidateText);
+                            }
                         }
                         break;
                     }
@@ -521,7 +523,6 @@ engineProcessKeyEventStart:
                     {
                         // external db
                         CandidateList cl;
-                        set<string> cInserted;
                         string characters = engine->correctings->toString();
                         for (map<string, PinyinDatabase*>::iterator it = LuaBinding::pinyinDatabases.begin(); it != LuaBinding::pinyinDatabases.end(); ++it) {
                             for (size_t i = 0;; i++) {
@@ -532,14 +533,15 @@ engineProcessKeyEventStart:
                         }
                         for (CandidateList::iterator it = cl.begin(); it != cl.end(); ++it) {
                             const string & candidate = it->second;
-                            if (cInserted.find(candidate) == cInserted.end()) {
-                                IBusText* candidateText = ibus_text_new_from_string(it->second.c_str());
+                            if (candidateSet.find(candidate) == candidateSet.end()) {
+                                candidateSet.insert(candidate);
+
+                                IBusText* candidateText = ibus_text_new_from_string(candidate.c_str());
                                 engineAppendLookupTable(engine, candidateText);
                                 ibus_object_unref(candidateText);
-                                cInserted.insert(it->second);
                             }
                         }
-                        if (cInserted.size() == 0) {
+                        if (candidateSet.size() == 0) {
                             // put a dummy one
                             IBusText* dummyCandidate = ibus_text_new_from_string("?");
                             engineAppendLookupTable(engine, dummyCandidate);
@@ -719,7 +721,7 @@ engineProcessKeyEventStart:
                         keyval = 0;
                         keychrs = "";
                     }
-                } else if (keyval < 128) {
+                } else if (keyval < 128 && keyval > 0) {
                     // assuming that this is a pinyin char
                     // double pinyin may use ';' while full pinyin may use '\''
                     // may falback to eng or full pinyin here
@@ -776,7 +778,6 @@ engineProcessKeyEventStart:
                             *engine->preedit = "";
                         }
                         engine->cloudClient->request(punctuation, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                        engine->lastInputIsChinese = true;
                         handled = true;
                     }
                 }
@@ -814,7 +815,7 @@ engineProcessKeyEventStart:
             // eng mode or unhandled in chinese mode
             if (handled || (requestCount == 0 && engine->preedit->length() == 0)) {
                 res = handled;
-                if (!handled && isalnum(keychr)) engine->lastInputIsChinese = false;
+                if (!handled && keychr != 0 && keychr < 127 && isalnum(keychr)) engine->lastInputIsChinese = false;
                 break;
             } else {
                 if (engine->preedit->length() > 0) {
@@ -825,7 +826,7 @@ engineProcessKeyEventStart:
                     *engine->activePreedit = "";
                 }
                 engine->cloudClient->request(keychrs, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-                engine->lastInputIsChinese = false;
+                if (keychr != 0 && keychr < 127 && isalnum(keychr)) engine->lastInputIsChinese = false;
 
                 res = TRUE;
                 break;
@@ -891,16 +892,19 @@ static void engineFocusIn(IBusSgpyccEngine* engine) {
     DEBUG_PRINT(2, "[ENGINE] FocusIn\n");
     Configuration::activeEngine = (typeof (Configuration::activeEngine))engine;
     engineUpdateProperties(engine);
+    engineUpdatePreedit(engine);
 }
 
 static void engineFocusOut(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] FocusOut\n");
     Configuration::activeEngine = NULL;
-    engineUpdateProperties(engine);
 }
 
 static void engineReset(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(1, "[ENGINE] Reset\n");
+    engine->cloudClient->removeFirstRequest(INT_MAX);
+    engineUpdateProperties(engine);
+    engineUpdatePreedit(engine);
 }
 
 static void engineEnable(IBusSgpyccEngine * engine) {
@@ -912,14 +916,12 @@ static void engineEnable(IBusSgpyccEngine * engine) {
 static void engineDisable(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(1, "[ENGINE] Disable\n");
     engine->enabled = false;
-    engineUpdateProperties(engine);
     // cancel all requests
     engine->cloudClient->removeFirstRequest(INT_MAX);
-    engineUpdatePreedit(engine);
+    engineUpdateProperties(engine);
 }
 
 static void engineSetCursorLocation(IBusSgpyccEngine *engine, gint x, gint y, gint w, gint h) {
-
     DEBUG_PRINT(7, "[ENGINE] SetCursorLocation(%d, %d, %d, %d)\n", x, y, w, h);
     engine->cursorArea.height = h;
     engine->cursorArea.width = w;
@@ -1018,7 +1020,6 @@ static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const strin
         return pinyins;
     } else {
         *pRemainingPinyins = pinyins;
-
         return "";
     }
 }
@@ -1026,16 +1027,8 @@ static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const strin
 static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string& pinyins) {
     string remainingPinyins, partialConvertedCharacters;
     partialConvertedCharacters = getPartialCacheConvert(engine, pinyins, &remainingPinyins);
-    if ((int) g_utf8_strlen(partialConvertedCharacters.c_str(), -1) > Configuration::fallbackMinCacheLength) {
-        return partialConvertedCharacters +
-                LuaBinding::pinyinDatabases.begin()->second->
-                greedyConvert(remainingPinyins, Configuration::dbCompleteLongPhraseAdjust);
-    } else {
-
-        return LuaBinding::pinyinDatabases.begin()->second->
-                greedyConvert(pinyins, Configuration::dbCompleteLongPhraseAdjust);
-    }
-
+    return LuaBinding::pinyinDatabases.begin()->second->
+            greedyConvert(pinyins, Configuration::dbCompleteLongPhraseAdjust, Configuration::dbLengthLimit);
 }
 
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
@@ -1078,7 +1071,10 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
                 if (Configuration::requestedBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::requestedBackColor, preeditLen, preeditLen + currReqLen));
                 if (Configuration::requestedForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::requestedForeColor, preeditLen, preeditLen + currReqLen));
             } else {
-                string requestString = getPartialCacheConvert(engine, request.requestString);
+                string requestString = request.requestString;
+                if (Configuration::showCachedInPreedit) {
+                    requestString = getPartialCacheConvert(engine, requestString, NULL, Configuration::preRequestFallback);
+                }
                 preedit += requestString;
                 currReqLen = g_utf8_strlen(requestString.c_str(), -1);
                 // colors

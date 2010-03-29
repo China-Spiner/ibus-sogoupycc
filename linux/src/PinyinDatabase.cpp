@@ -12,6 +12,7 @@
 #include "PinyinDatabase.h"
 #include "defines.h"
 #include "PinyinSequence.h"
+#include "Configuration.h"
 
 #define DB_CACHE_SIZE "16384"
 #define DB_PREFETCH_LEN 6 
@@ -25,7 +26,7 @@ PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
     // do not direct write to PinyinDatabase::db (for thread safe)
     sqlite3 *db;
     if (dbPath.empty()) db = NULL;
-    else if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
+    else if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_EXCLUSIVE | SQLITE_OPEN_FULLMUTEX, NULL) != SQLITE_OK) {
         db = NULL;
     }
     if (db) {
@@ -172,82 +173,96 @@ void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candida
     sqlite3_finalize(stmt);
 }
 
-string PinyinDatabase::greedyConvert(const string& pinyins, const double longPhraseAdjust) {
-    return greedyConvert(PinyinSequence(pinyins), longPhraseAdjust);
+string PinyinDatabase::greedyConvert(const string& pinyins, const double longPhraseAdjust, int lengthLimit) {
+    return greedyConvert(PinyinSequence(pinyins), longPhraseAdjust, lengthLimit);
 }
 
-string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double longPhraseAdjust) {
+string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double longPhraseAdjust, int lengthLimit) {
+    // this may take a lot time
     DEBUG_PRINT(3, "[PYDB] greedyConvert: %s\n", pinyins.toString().c_str());
-
+    if (sqlite3_threadsafe()) {
+        DEBUG_PRINT(3, "[PYDB] sqlite3 is thread safe\n");
+    } else {
+        ibus_warning("sqlite is not thread safe! program is likely to crash soon.\n");
+    }
     // result
     string r;
     if (!db) return r;
 
+    if (lengthLimit > PINYIN_DB_ID_MAX) lengthLimit = PINYIN_DB_ID_MAX;
+    else if (lengthLimit < 1) lengthLimit = 1;
+
     // build query statement
     for (int id = (int) pinyins.size() - 1; id >= 0;) {
-        int lengthMax = id + 1;
-        if (lengthMax > PINYIN_DB_ID_MAX) lengthMax = PINYIN_DB_ID_MAX;
-
-        ostringstream query;
-        query << "SELECT phrase, freqadj FROM (";
-
-        for (int l = lengthMax; l > 0; --l) {
-            // try construct from pinyins[id - l + 1 .. id]
-            ostringstream queryWhere;
-            for (int p = id - l + 1; p <= id; p++) {
-                string pinyin = pinyins[p];
-                int cid, vid;
-                PinyinDatabase::getPinyinIDs(pinyin, cid, vid);
-                if (!queryWhere.str().empty()) queryWhere << " AND ";
-                queryWhere << "s" << p - (id - l + 1) << "=" << cid;
-                if (vid != PinyinDefines::PINYIN_ID_VOID) queryWhere << " AND y" << p - (id - l + 1) << "=" << vid;
-            }
-            if (l != lengthMax) query << " UNION ALL ";
-            query << "SELECT phrase, freq * " << pow(l, longPhraseAdjust) <<
-                    " AS freqadj FROM main.py_phrase_" << l - 1 << " WHERE " << queryWhere.str();
-        }
-        query << string(") GROUP BY phrase ORDER BY freqadj DESC LIMIT 1");
-        //puts(query.str().c_str());
-        sqlite3_stmt *stmt;
-
-        if (sqlite3_prepare_v2(db, query.str().c_str(), query.str().length(), &stmt, NULL) != SQLITE_OK) return r;
-
         int matchLength = 0;
-        string phrase;
-        for (bool running = true; running;) {
-            switch (sqlite3_step(stmt)) {
-                case SQLITE_ROW:
-                {
-                    // got it !
-                    phrase = (const char*) sqlite3_column_text(stmt, 0);
-                    break;
+        // check cache first.
+        string phrase = Configuration::getGlobalCache(pinyins.toString(0, id + 1), true);
+
+        if (phrase.empty()) {
+            int lengthMax = id + 1;
+            if (lengthMax > lengthLimit) lengthMax = lengthLimit;
+
+            ostringstream query;
+            query << "SELECT phrase, freqadj FROM (";
+
+            for (int l = lengthMax; l > 0; --l) {
+                // try construct from pinyins[id - l + 1 .. id]
+                ostringstream queryWhere;
+                for (int p = id - l + 1; p <= id; p++) {
+                    string pinyin = pinyins[p];
+                    int cid, vid;
+                    PinyinDatabase::getPinyinIDs(pinyin, cid, vid);
+                    if (!queryWhere.str().empty()) queryWhere << " AND ";
+                    queryWhere << "s" << p - (id - l + 1) << "=" << cid;
+                    if (vid != PinyinDefines::PINYIN_ID_VOID) queryWhere << " AND y" << p - (id - l + 1) << "=" << vid;
                 }
-                case SQLITE_DONE:
-                {
-                    running = false;
-                    break;
-                }
-                case SQLITE_BUSY:
-                {
-                    // sleep a short time, say, 1 ms
-                    usleep(1024);
-                }
-                case SQLITE_MISUSE:
-                {
-                    fprintf(stderr, "sqlite3_step() misused.\nthis should not happen.");
-                    running = false;
-                    break;
-                }
-                case SQLITE_ERROR: default:
-                {
-                    fprintf(stderr, "sqlite3_step() error: %s\n (ignored).\n", sqlite3_errmsg(db));
-                    running = false;
-                    break;
+                if (l != lengthMax) query << " UNION ALL ";
+                query << "SELECT phrase, freq * " << pow(l, longPhraseAdjust) <<
+                        " AS freqadj FROM main.py_phrase_" << l - 1 << " WHERE " << queryWhere.str();
+            }
+            query << string(") GROUP BY phrase ORDER BY freqadj DESC LIMIT 1");
+            //puts(query.str().c_str());
+            sqlite3_stmt *stmt;
+
+            if (sqlite3_prepare_v2(db, query.str().c_str(), query.str().length(), &stmt, NULL) != SQLITE_OK) return r;
+
+            for (bool running = true; running;) {
+                switch (sqlite3_step(stmt)) {
+                    case SQLITE_ROW:
+                    {
+                        // got it !
+                        phrase = (const char*) sqlite3_column_text(stmt, 0);
+                        break;
+                    }
+                    case SQLITE_DONE:
+                    {
+                        running = false;
+                        break;
+                    }
+                    case SQLITE_BUSY:
+                    {
+                        // sleep a short time, say, 1 ms
+                        usleep(1024);
+                    }
+                    case SQLITE_MISUSE:
+                    {
+                        fprintf(stderr, "sqlite3_step() misused.\nthis should not happen.");
+                        running = false;
+                        break;
+                    }
+                    case SQLITE_ERROR: default:
+                    {
+                        fprintf(stderr, "sqlite3_step() error: %s\n (ignored).\n", sqlite3_errmsg(db));
+                        running = false;
+                        break;
+                    }
                 }
             }
-        }
-        sqlite3_finalize(stmt);
+            sqlite3_finalize(stmt);
+        } else {
+            DEBUG_PRINT(3, "[PYDB] got cache[%s] = %s\n", pinyins.toString(0, id + 1).c_str(), phrase.c_str());
 
+        }
         matchLength = (int) g_utf8_strlen(phrase.c_str(), -1);
 
         if (matchLength == 0) {
@@ -264,6 +279,9 @@ string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double
             break;
         }
     }
+    DEBUG_PRINT(3, "[PYDB] greedyConvert result %s\n", r.c_str());
+    // write to cache
+    Configuration::writeGlobalCache(pinyins.toString(), r, true);
     return r;
 }
 

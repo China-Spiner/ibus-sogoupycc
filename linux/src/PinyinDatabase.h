@@ -39,8 +39,8 @@ public:
     void query(const string pinyins, CandidateList& candidateList, const int limitCount = 0, const double longPhraseAdjust = 0, const int limitLength = PINYIN_DB_ID_MAX);
     void query(const PinyinSequence& pinyins, CandidateList& candidateList, const int limitCount = 0, const double longPhraseAdjust = 0, const int limitLength = PINYIN_DB_ID_MAX);
 
-    string greedyConvert(const string& pinyins, const double longPhraseAdjust = 4);
-    string greedyConvert(const PinyinSequence& pinyins, const double longPhraseAdjust = 4);
+    string greedyConvert(const string& pinyins, const double longPhraseAdjust = 4, int limitLength = PINYIN_DB_ID_MAX);
+    string greedyConvert(const PinyinSequence& pinyins, const double longPhraseAdjust = 4, int limitLength = PINYIN_DB_ID_MAX);
     
     const bool isDatabaseOpened() const;
 

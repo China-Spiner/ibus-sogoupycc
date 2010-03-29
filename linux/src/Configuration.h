@@ -8,10 +8,13 @@
 #ifndef _CONFIGURATION_H
 #define	_CONFIGURATION_H
 
-#include "LuaBinding.h"
 #include <set>
 #include <string>
 #include <ibus.h>
+
+#include "LuaBinding.h"
+
+#define WEAK_CACHE_PREFIX "._."
 
 using std::string;
 using std::set;
@@ -118,7 +121,6 @@ namespace Configuration {
     extern bool preRequestFallback;
 
     // tolerances
-    extern int fallbackMinCacheLength;
     extern int fallbackEngTolerance;
 
     // pre request timeout
@@ -141,13 +143,15 @@ namespace Configuration {
     // multi tone limit
     extern size_t multiToneLimit;
 
-    // functions (callby LuaBinding, main)
+    // functions (callby LuaBinding, main, engine, database)
     void addConstantsToLua(LuaBinding& luaBinding);
     void staticInit();
     void staticDestruct();
     void activeExtension(string label);
     bool activeExtension(unsigned keyval, unsigned keymask);
     bool isPunctuationAutoWidth(char punctuation);
+    const string getGlobalCache(const string& requestString, const bool includeWeak = false);
+    void writeGlobalCache(const string& requsetSring, const string& content, const bool weak = false);
 
     // lua C functions
     /**

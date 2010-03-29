@@ -55,11 +55,10 @@ namespace Configuration {
     bool preRequestFallback = true;
 
     // int
-    int fallbackMinCacheLength = 4;
     int fallbackEngTolerance = 3;
 
     // pre request timeout
-    double preRequestTimeout = 1.;
+    double preRequestTimeout = 0.7;
     double requestTimeout = 30.;
 
     // selection timeout tolerance
@@ -67,7 +66,7 @@ namespace Configuration {
 
     // punctuations
     PunctuationMap punctuationMap;
-    string autoWidthPunctuations = ".,";
+    string autoWidthPunctuations = ".,:";
 
     // multi tone chineses
     size_t multiToneLimit = 2;
@@ -76,7 +75,7 @@ namespace Configuration {
     int dbResultLimit = 128, dbLengthLimit = 10;
     string dbOrder = "";
     double dbLongPhraseAdjust = 1.2;
-    double dbCompleteLongPhraseAdjust = 7;
+    double dbCompleteLongPhraseAdjust = 4;
 
     // class FullPunctuation
 
@@ -356,6 +355,25 @@ namespace Configuration {
 
     bool isPunctuationAutoWidth(char punc) {
         return autoWidthPunctuations.find(punc) != string::npos;
+    }
+
+    const string getGlobalCache(const string& requestString, const bool includeWeak) {
+        string content = LuaBinding::getStaticBinding().getValue(requestString.c_str(), "", "request_cache");
+        if (content.substr(0, sizeof (WEAK_CACHE_PREFIX) - 1) == string(WEAK_CACHE_PREFIX)) {
+            if (includeWeak) return content.substr(sizeof (WEAK_CACHE_PREFIX) - 1);
+            else return "";
+        } else {
+
+            return content;
+        }
+    }
+
+    void writeGlobalCache(const string& requsetSring, const string& content, const bool weak) {
+        if (weak) {
+            LuaBinding::getStaticBinding().setValue(requsetSring.c_str(), (string(WEAK_CACHE_PREFIX) + content).c_str(), "request_cache");
+        } else {
+            LuaBinding::getStaticBinding().setValue(requsetSring.c_str(), content.c_str(), "request_cache");
+        }
     }
 
     int l_registerCommand(lua_State *L) {

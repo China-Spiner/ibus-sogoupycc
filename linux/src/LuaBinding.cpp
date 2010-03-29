@@ -90,7 +90,6 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::quickResponseKey.readFromLua(lb, "quick_response_key");
 
     // tolerances
-    Configuration::fallbackMinCacheLength = lb.getValue("fallback_min_cache_length", Configuration::fallbackMinCacheLength);
     Configuration::fallbackEngTolerance = lb.getValue("auto_eng_tolerance", Configuration::fallbackEngTolerance);
 
     // bools

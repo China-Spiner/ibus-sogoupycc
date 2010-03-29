@@ -60,7 +60,7 @@ public:
      * callbackFunc can be NULL, fetchFunc can't
      */
     void request(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam);
-    void preRequest(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam);
+    static void preRequest(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam);
     void removeFirstRequest(int count = 1);
     void removeLastRequest();
     vector<PinyinCloudRequest> exportAndRemoveAllRequest();
@@ -76,7 +76,7 @@ private:
     deque<PinyinCloudRequest> requests;
     pthread_rwlock_t requestsLock;
     unsigned int nextRequestId;
-
+    static bool preRequestBusy;
 };
 
 
