@@ -6,8 +6,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <cassert>
 #include <vector>
+#include <bits/stl_vector.h>
 
 #include "defines.h"
 #include "engine.h"
@@ -15,6 +17,7 @@
 #include "XUtility.h"
 #include "Configuration.h"
 
+#define WEAK_CACHE_PREFIX "._."
 
 typedef struct _IBusSgpyccEngine IBusSgpyccEngine;
 typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
@@ -57,6 +60,7 @@ struct _IBusSgpyccEngine {
     gboolean lastProcessKeyResult;
     guint32 lastKeyval;
     pthread_mutex_t engineMutex;
+    bool lastInputIsChinese;
 
     // lua binding
     // now it is indeed global
@@ -126,11 +130,13 @@ static string luaFetcher(void* voidData, const string & requestString);
 static string preFetcher(void* voidData, const string& requestString);
 
 // request cache
-static const string getRequestCache(IBusSgpyccEngine* engine, const string& requestString);
-static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSring, const string& content);
+static const string getRequestCache(IBusSgpyccEngine* engine, const string& requestString, const bool includeWeak = false);
+static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSring, const string& content, const bool weak = false);
 
 // paritical convert (using cache)
-static const string particalConvert(IBusSgpyccEngine* engine, const string& pinyins);
+static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const string& pinyins, string* remainingPinyins = NULL, const bool includeWeak = false);
+static const vector<string> getPartialCacheConverts(IBusSgpyccEngine* engine, const string& pinyins);
+static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string& pinyins);
 
 inline void ibus_object_unref(gpointer object) {
 #if !IBUS_CHECK_VERSION(1, 3, 0)
@@ -228,6 +234,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     // internal vars
     engine->lastProcessKeyResult = FALSE;
     engine->lastKeyval = 0;
+    engine->lastInputIsChinese = false;
 
     // lookup table
     engine->lookupTableLabelCount = Configuration::tableLabelKeys.size();
@@ -351,6 +358,7 @@ engineProcessKeyEventStart:
             engine->correctings->removeAt(0);
             if (!isChineseCharacter && !engine->correctings->empty()) pinyin += " ";
             engine->cloudClient->request(pinyin, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+            engine->lastInputIsChinese = true;
         }
     }
 
@@ -378,6 +386,7 @@ engineProcessKeyEventStart:
             engine->commitedConvertingPinyins->clear();
             XUtility::setSelectionUpdatedTime();
             keyval = 0;
+            engine->lastInputIsChinese = true;
             res = TRUE;
             goto engineProcessKeyEventStart;
         } else if (keyval == IBUS_BackSpace) {
@@ -427,6 +436,7 @@ engineProcessKeyEventStart:
                     int length = g_utf8_strlen(candidate->text, -1);
                     // use cloud client commit, do not direct commit !
                     engine->cloudClient->request(candidate->text, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                    engine->lastInputIsChinese = true;
                     // remove pinyin section from commitingPinyins
                     for (int i = 0; i < length; ++i) {
                         if (!engine->commitedConvertingPinyins->empty()) *engine->commitedConvertingPinyins += ' ';
@@ -453,7 +463,7 @@ engineProcessKeyEventStart:
             // default: use external dict if possible
             string dbOrder = Configuration::dbOrder;
             if (dbOrder.empty()) {
-                if (LuaBinding::pinyinDatabases.size() > 0) dbOrder = "d";
+                if (LuaBinding::pinyinDatabases.size() > 0) dbOrder = "cd";
                 else dbOrder = "2";
             }
 
@@ -493,6 +503,17 @@ engineProcessKeyEventStart:
                                 engineAppendLookupTable(engine, candidate);
                                 ibus_object_unref(candidate);
                             }
+                        }
+                        break;
+                    }
+                    case 'c':
+                    {
+                        // request cache
+                        vector<string> partialCaches = getPartialCacheConverts(engine, engine->correctings->toString());
+                        for (vector<string>::iterator it = partialCaches.begin(); it != partialCaches.end(); ++it) {
+                            IBusText* candidateText = ibus_text_new_from_string(it->c_str());
+                            engineAppendLookupTable(engine, candidateText);
+                            ibus_object_unref(candidateText);
                         }
                         break;
                     }
@@ -542,9 +563,9 @@ engineProcessKeyEventStart:
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
 
     } else {
-        // not in correction mode
+        // not in correction mode :p
 
-        // check *engine->commitedConverting
+        // check *engine->commitedConverting, write them to cache and reset selection time
         if (!engine->commitedConvertingCharacters->empty()) {
             // rtrim, assuming string::npos + 1 == 0
             engine->commitedConvertingCharacters->erase(engine->commitedConvertingCharacters->find_last_not_of(" \n\r\t") + 1);
@@ -560,14 +581,14 @@ engineProcessKeyEventStart:
         ibus_engine_hide_lookup_table((IBusEngine*) engine);
         ibus_engine_hide_auxiliary_text((IBusEngine*) engine);
 
-        while (res == 0) { // use while here to make 'break' available
+        while (res == FALSE) { // use while here to make 'break' available, orig use (if)
             // ignore some masks (Issue 8, Comment #11)
             state = state & CONSIDER_MASKS;
 
-            // fallback C key handler
+            // check force comit all key
             engine->cloudClient->readLock();
             int requestCount = engine->cloudClient->getRequestCount();
-            engine->cloudClient->readUnlock();
+            engine->cloudClient->unlock();
 
             // normally do not handle release event, but watch for eng mode toggling
             if ((state & IBUS_RELEASE_MASK) == IBUS_RELEASE_MASK && engine->lastKeyval == keyval) {
@@ -600,6 +621,26 @@ engineProcessKeyEventStart:
                 break;
             }
 
+            // check force commit all key first
+            if (requestCount > 0 && Configuration::quickResponseKey.match(keyval)) {
+                // force convertall requests rightnow
+                string requestsResult;
+                std::vector<PinyinCloudRequest> requests = engine->cloudClient->exportAndRemoveAllRequest();
+                for (std::vector<PinyinCloudRequest>::iterator it = requests.begin(); it != requests.end(); ++it) {
+                    if (it->responsed && !it->responseString.empty()) {
+                        requestsResult += it->responseString;
+                    } else {
+                        requestsResult += getGreedyLocalCovert(engine, it->requestString);
+                    }
+                }
+                IBusText* text = ibus_text_new_from_string(requestsResult.c_str());
+                ibus_engine_commit_text((IBusEngine*) engine, text);
+                ibus_object_unref(text);
+                engine->lastInputIsChinese = true;
+                res = TRUE;
+                break;
+            }
+
             bool handled = false;
             char keychr = (keyval < 128) ? keyval : 0;
             string keychrs = "";
@@ -616,6 +657,8 @@ engineProcessKeyEventStart:
             if (!engine->engMode) {
                 // used by not strict double pinyin mode
                 bool fallbackToFullPinyin = false;
+                bool fallbackToEng = false;
+
                 if (Configuration::startCorrectionKey.match(keyval)) {
                     // switch to editing mode
                     if (!engine->preedit->empty()) {
@@ -678,10 +721,12 @@ engineProcessKeyEventStart:
                 } else if (keyval < 128) {
                     // assuming that this is a pinyin char
                     // double pinyin may use ';' while full pinyin may use '\''
+                    // may falback to eng or full pinyin here
                     if (Configuration::useDoublePinyin) {
                         if (LuaBinding::doublePinyinScheme.isKeyBinded(keychr)) {
                             if (LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit + keychr)) {
                                 *engine->preedit += keychr;
+                                engine->lastInputIsChinese = true;
                                 handled = true;
                             } else {
                                 if (!Configuration::strictDoublePinyin) fallbackToFullPinyin = true;
@@ -689,19 +734,40 @@ engineProcessKeyEventStart:
                         }
                         if (keyval >= IBUS_a && keyval <= IBUS_z) handled = true;
                     }
-                    if ((fallbackToFullPinyin || !Configuration::useDoublePinyin) && ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0))) {
-                        if (keyval == '\'') keychr = ' ';
-                        *engine->preedit += keychr;
-                        handled = true;
+
+
+                    if (fallbackToFullPinyin || !Configuration::useDoublePinyin) {
+                        if ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0)) {
+                            if (keyval == '\'') keychr = ' ';
+                            *engine->preedit += keychr;
+                            engine->lastInputIsChinese = true;
+                            handled = true;
+                        }
+
+                        // check fallback to eng
+                        if (Configuration::fallbackEngTolerance >= 0) {
+                            PinyinSequence ps = PinyinUtility::separatePinyins(*engine->preedit);
+                            int continuousInvalidPinyinCount = 0;
+                            for (size_t i = 0; i < ps.size(); i++) {
+                                if (PinyinUtility::isValidPinyin(ps[i])) continuousInvalidPinyinCount = 0;
+                                else if (++continuousInvalidPinyinCount >= Configuration::fallbackEngTolerance) {
+                                    fallbackToEng = true;
+                                    engine->lastInputIsChinese = false;
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
 
-                if (!handled) {
+                if (!handled && fallbackToEng == false) {
                     // check punctuation
-                    // todo: move to configuration
                     string punctuation = engine->punctuationMap->getFullPunctuation(keyval);
-                    if (!punctuation.empty()) {
-                        // found mapped punctuation
+
+                    if (!punctuation.empty() &&
+                            (!Configuration::isPunctuationAutoWidth((char) keyval) ||
+                            (Configuration::isPunctuationAutoWidth((char) keyval) && (engine->lastInputIsChinese)))) {
+                        // found mapped punctuation, use full width
                         if (engine->preedit->length() > 0) {
                             engine->requesting = true;
                             engineUpdateProperties(engine);
@@ -709,33 +775,45 @@ engineProcessKeyEventStart:
                             *engine->preedit = "";
                         }
                         engine->cloudClient->request(punctuation, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                        engine->lastInputIsChinese = true;
                         handled = true;
                     }
                 }
 
                 // update active preedit
                 if (!LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit)) fallbackToFullPinyin = true;
-                if (Configuration::useDoublePinyin && fallbackToFullPinyin == false) {
+                if (fallbackToEng) {
+                    engine->engMode = true;
+                    engineUpdateProperties(engine);
+                    engine->cloudClient->request(*engine->preedit, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                    *engine->activePreedit = "";
+                } else if (Configuration::useDoublePinyin && fallbackToFullPinyin == false) {
                     *engine->activePreedit = LuaBinding::doublePinyinScheme.query(*engine->preedit);
                 } else {
                     *engine->activePreedit = PinyinUtility::separatePinyins(*engine->preedit);
                 }
 
                 if (*engine->lastActivePreedit != *engine->activePreedit && !engine->activePreedit->empty()) {
-                    // send prerequest
+                    // send prerequest if user need
                     // handle case: wo ', if last pinyin is partial, do not perform prerequest
-                    PinyinSequence ps = *engine->activePreedit;
-                    string preRequestString;
-                    if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
-                    else preRequestString = ps.toString(0, ps.size() - 1);
-                    engine->cloudClient->preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                    if (Configuration::preRequest) {
+                        string preRequestString;
+                        PinyinSequence ps = *engine->activePreedit;
+
+                        if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
+                        else preRequestString = ps.toString(0, ps.size() - 1);
+
+                        engine->cloudClient->preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                    }
+                    // now inputing chinses
                     *engine->lastActivePreedit = *engine->activePreedit;
                 }
-            }
+            } // check eng mode
 
             // eng mode or unhandled in chinese mode
             if (handled || (requestCount == 0 && engine->preedit->length() == 0)) {
                 res = handled;
+                if (!handled && isalnum(keychr)) engine->lastInputIsChinese = false;
                 break;
             } else {
                 if (engine->preedit->length() > 0) {
@@ -746,6 +824,8 @@ engineProcessKeyEventStart:
                     *engine->activePreedit = "";
                 }
                 engine->cloudClient->request(keychrs, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                engine->lastInputIsChinese = false;
+
                 res = TRUE;
                 break;
             }
@@ -795,6 +875,7 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
     if (engine->requesting) {
         ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/requesting.png");
     } else {
+
         ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/idle.png");
     }
 
@@ -818,7 +899,6 @@ static void engineFocusOut(IBusSgpyccEngine * engine) {
 }
 
 static void engineReset(IBusSgpyccEngine * engine) {
-
     DEBUG_PRINT(1, "[ENGINE] Reset\n");
 }
 
@@ -851,6 +931,7 @@ static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
     engine->clientCapabilities = caps;
 #ifdef IBUS_CAP_SURROUNDING_TEXT
     if (engine->clientCapabilities & IBUS_CAP_SURROUNDING_TEXT) {
+
         DEBUG_PRINT(3, "[ENGINE] SetCapabilities: IBUS_CAP_SURROUNDING_TEXT\n");
     }
 #endif
@@ -859,6 +940,7 @@ static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
 static void enginePageUp(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] PageUp\n");
     if (!engine->correctings->empty()) {
+
         if (ibus_lookup_table_page_up(engine->table)) engine->tablePageNumber--;
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -867,6 +949,7 @@ static void enginePageUp(IBusSgpyccEngine * engine) {
 static void enginePageDown(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] PageDown\n");
     if (!engine->correctings->empty()) {
+
         if (ibus_lookup_table_page_down(engine->table)) engine->tablePageNumber++;
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -875,6 +958,7 @@ static void enginePageDown(IBusSgpyccEngine * engine) {
 static void engineCursorUp(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] CursorUp\n");
     if (!engine->correctings->empty()) {
+
         ibus_lookup_table_cursor_up(engine->table);
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -883,28 +967,74 @@ static void engineCursorUp(IBusSgpyccEngine * engine) {
 static void engineCursorDown(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] CursorDown\n");
     if (!engine->correctings->empty()) {
+
         ibus_lookup_table_cursor_down(engine->table);
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
 }
 
-static const string particalConvert(IBusSgpyccEngine* engine, const string& pinyins) {
+static const vector<string> getPartialCacheConverts(IBusSgpyccEngine* engine, const string& pinyins) {
+    vector<string> r;
+    // check pre request result
+    string lastCacheFound;
+    PinyinSequence ps = pinyins;
+    if (!PinyinUtility::isValidPartialPinyin(ps[0])) return r;
+    for (size_t i = ps.size(); i > 0; i--) {
+        if (i < ps.size() || PinyinUtility::isValidPinyin(ps[i - 1])) {
+            string cache = getRequestCache(engine, ps.toString(0, i));
+            if (!cache.empty() && (lastCacheFound.find(cache) == string::npos || lastCacheFound.length() - cache.length() > 10)) {
+
+                r.push_back(cache);
+                lastCacheFound = cache;
+            }
+        }
+    }
+    return r;
+}
+
+static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const string& pinyins, string* pRemainingPinyins, const bool includeWeak) {
     if (Configuration::showCachedInPreedit == false) return pinyins;
     // check pre request result
     PinyinSequence ps = pinyins;
     for (size_t i = ps.size(); i > 0; i--) {
         if (i < ps.size() || PinyinUtility::isValidPinyin(ps[i - 1])) {
-            string cache = getRequestCache(engine, ps.toString(0, i));
+            string cache = getRequestCache(engine, ps.toString(0, i), includeWeak);
             DEBUG_PRINT(5, "[ENGINE] partical convert find cache: %s\n", cache.c_str());
             if (!cache.empty()) {
                 string remainingPinyins = ps.toString(i, 0);
                 DEBUG_PRINT(5, "[ENGINE] partical convert, remaining: %s\n", remainingPinyins.c_str());
-                if (remainingPinyins.empty()) return cache;
-                else return cache + " " + remainingPinyins;
+                if (pRemainingPinyins == NULL) {
+                    if (remainingPinyins.empty()) return cache;
+                    else return cache + " " + remainingPinyins;
+                } else {
+                    *pRemainingPinyins = remainingPinyins;
+                    return cache;
+                }
             }
         }
     }
-    return pinyins;
+    if (pRemainingPinyins == NULL) {
+        return pinyins;
+    } else {
+        *pRemainingPinyins = pinyins;
+
+        return "";
+    }
+}
+
+static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string& pinyins) {
+    string remainingPinyins, partialConvertedCharacters;
+    partialConvertedCharacters = getPartialCacheConvert(engine, pinyins, &remainingPinyins);
+    if ((int) g_utf8_strlen(partialConvertedCharacters.c_str(), -1) > Configuration::fallbackMinCacheLength) {
+        return partialConvertedCharacters +
+                LuaBinding::pinyinDatabases.begin()->second->
+                greedyConvert(remainingPinyins, Configuration::dbCompleteLongPhraseAdjust);
+    } else {
+
+        return LuaBinding::pinyinDatabases.begin()->second->
+                greedyConvert(pinyins, Configuration::dbCompleteLongPhraseAdjust);
+    }
+
 }
 
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
@@ -947,7 +1077,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
                 if (Configuration::requestedBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::requestedBackColor, preeditLen, preeditLen + currReqLen));
                 if (Configuration::requestedForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::requestedForeColor, preeditLen, preeditLen + currReqLen));
             } else {
-                string requestString = particalConvert(engine, request.requestString);
+                string requestString = getPartialCacheConvert(engine, request.requestString);
                 preedit += requestString;
                 currReqLen = g_utf8_strlen(requestString.c_str(), -1);
                 // colors
@@ -971,13 +1101,25 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
 
     // append current preedit (not belong to a request, still editable, active)
     string activePreedit = *engine->activePreedit;
+    string remainingPinyins;
+    bool isLocalDatabaseResult = false;
     if (!engine->correctings->empty()) {
         // only show convertingPinyins as activePreedit
         activePreedit = engine->correctings->toString();
     } else if (Configuration::showCachedInPreedit) {
-        activePreedit = particalConvert(engine, activePreedit);
+        if (Configuration::preRequestFallback) {
+            string activePreeditAlternative = getPartialCacheConvert(engine, activePreedit, &remainingPinyins);
+            activePreedit = getPartialCacheConvert(engine, activePreedit, &remainingPinyins, true);
+            isLocalDatabaseResult = (activePreeditAlternative != activePreedit);
+        } else {
+            activePreedit = getPartialCacheConvert(engine, activePreedit, &remainingPinyins, false);
+        }
+    } else {
+        remainingPinyins = activePreedit;
+        activePreedit = "";
     }
-    preedit += activePreedit;
+    if (!remainingPinyins.empty() && !activePreedit.empty()) remainingPinyins = string(" ") + remainingPinyins;
+    preedit += activePreedit + remainingPinyins;
 
     // create IBusText-type preeditText
     size_t preeditFullLen = g_utf8_strlen(preedit.c_str(), -1);
@@ -991,8 +1133,23 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
         if (Configuration::correctingBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::correctingBackColor, preeditLen, preeditFullLen));
         if (Configuration::correctingForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::correctingForeColor, preeditLen, preeditFullLen));
     } else {
-        if (Configuration::preeditBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::preeditBackColor, preeditLen, preeditFullLen));
-        if (Configuration::preeditForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::preeditForeColor, preeditLen, preeditFullLen));
+        // (partial converted) + remainingPinyins
+        size_t remainingPinyinsLen = g_utf8_strlen(remainingPinyins.c_str(), -1);
+        if (preeditLen < preeditFullLen - remainingPinyinsLen) {
+            if (Configuration::preRequestFallback && isLocalDatabaseResult) {
+                // local database result
+                if (Configuration::localDbBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::localDbBackColor, preeditLen, preeditFullLen - remainingPinyinsLen));
+                if (Configuration::localDbForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::localDbForeColor, preeditLen, preeditFullLen - remainingPinyinsLen));
+            } else {
+                // cloud cache result
+                if (Configuration::cloudCacheBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::cloudCacheBackColor, preeditLen, preeditFullLen - remainingPinyinsLen));
+                if (Configuration::cloudCacheForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::cloudCacheForeColor, preeditLen, preeditFullLen - remainingPinyinsLen));
+            }
+        }
+        if (remainingPinyinsLen > 0) {
+            if (Configuration::preeditBackColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_background_new(Configuration::preeditBackColor, preeditFullLen - remainingPinyinsLen, preeditFullLen));
+            if (Configuration::preeditForeColor != INVALID_COLOR) ibus_attr_list_append(textAttrList, ibus_attr_foreground_new(Configuration::preeditForeColor, preeditFullLen - remainingPinyinsLen, preeditFullLen));
+        }
     }
     ibus_attr_list_append(textAttrList, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, preeditLen, preeditFullLen));
 
@@ -1012,13 +1169,14 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     // remember to unref text
     ibus_object_unref(preeditText);
 
-    engine->cloudClient->readUnlock();
+    engine->cloudClient->unlock();
 
     // pop finishedCount from requeset queue, no lock here, it's safe.
     engine->cloudClient->removeFirstRequest(finishedCount);
 
     // update properties
     if (requestCount - finishedCount <= 0 && engine->requesting) {
+
         engine->requesting = false;
         engineUpdateProperties(engine);
     }
@@ -1039,8 +1197,10 @@ string externalFetcher(void* data, const string & requestString) {
 
         // for statistics
         long long startMicrosecond = XUtility::getCurrentTime();
+        char timeLimitBuffer[64];
+        snprintf(timeLimitBuffer, sizeof (timeLimitBuffer), " '-%.2lf'", Configuration::requestTimeout);
 
-        FILE* fresponse = popen(string((Configuration::fetcherPath) + " '" + requestString + "'").c_str(), "r");
+        FILE* fresponse = popen(string((Configuration::fetcherPath) + " '" + requestString + "'" + timeLimitBuffer).c_str(), "r");
         // IMPROVE: pipe may be empty and closed during this read (say, a empty fetcher script)
         // this will cause program to stop.
 
@@ -1058,16 +1218,22 @@ string externalFetcher(void* data, const string & requestString) {
         totalResponseTime += requestTime;
         if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
 
-        // try read cache first if fails
+        // try read cache, or use local db if fails
         if ((res = response).empty()) res = getRequestCache(engine, requestString);
 
-        if ((res = response).empty()) {
+        if (res.empty()) {
             // empty, means fails
             totalFailedRequestCount++;
-            // try partial convert
-            res = particalConvert(engine, requestString);
+            // try local db, no lock here because db is not allowed to unload currently
+            if (Configuration::fallbackUsingDb && LuaBinding::pinyinDatabases.size() > 0) {
+                res = getGreedyLocalCovert(engine, requestString);
+            } else {
+                // try partial convert
+                res = getPartialCacheConvert(engine, requestString);
+            }
         } else {
             if (Configuration::writeRequestCache && requestString != res) {
+
                 writeRequestCache(engine, requestString, res);
             }
         }
@@ -1075,12 +1241,24 @@ string externalFetcher(void* data, const string & requestString) {
     return res;
 }
 
-static const string getRequestCache(IBusSgpyccEngine* engine, const string& requestString) {
-    return engine->luaBinding->getValue(requestString.c_str(), "", "request_cache");
+static const string getRequestCache(IBusSgpyccEngine* engine, const string& requestString, const bool includeWeak) {
+    string content = engine->luaBinding->getValue(requestString.c_str(), "", "request_cache");
+    if (content.substr(0, sizeof (WEAK_CACHE_PREFIX) - 1) == string(WEAK_CACHE_PREFIX)) {
+        if (includeWeak) return content.substr(sizeof (WEAK_CACHE_PREFIX) - 1);
+        else return "";
+    } else {
+
+        return content;
+    }
 }
 
-static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSring, const string& content) {
-    engine->luaBinding->setValue(requsetSring.c_str(), content.c_str(), "request_cache");
+static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSring, const string& content, const bool weak) {
+    if (weak) {
+        engine->luaBinding->setValue(requsetSring.c_str(), (string(WEAK_CACHE_PREFIX) + content).c_str(), "request_cache");
+    } else {
+
+        engine->luaBinding->setValue(requsetSring.c_str(), content.c_str(), "request_cache");
+    }
 }
 
 static string directFetcher(void* data, const string & requestString) {
@@ -1115,14 +1293,21 @@ static string preFetcher(void* data, const string& requestString) {
         }
 
         if ((res = response).empty()) {
-            // empty, means fails
-            res = requestString;
+            if (Configuration::preRequestFallback) {
+                // weak cache greedy result
+                res = getGreedyLocalCovert(engine, requestString);
+                if (Configuration::writeRequestCache && requestString != res) writeRequestCache(engine, requestString, res, true);
+            } else {
+                // empty, means fails
+                res = requestString;
+            }
         } else {
             // update statistics
             totalRequestCount++;
             double requestTime = (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
             totalResponseTime += requestTime;
             if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
+
             if (Configuration::writeRequestCache && requestString != res) writeRequestCache(engine, requestString, res);
         }
     }
@@ -1142,6 +1327,7 @@ static string luaFetcher(void* voidData, const string & requestString) {
     delete (LuaFuncData*) data;
     // fails?
     if (response.empty()) response = requestString;
+
     return response;
 }
 
@@ -1152,6 +1338,8 @@ int Engine::l_commitText(lua_State * L) {
     IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
     if (engine)
         engine->cloudClient->request(string(lua_tostring(L, 1)), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    engine->lastInputIsChinese = false;
+
     return 0; // return 0 value to lua code
 }
 
@@ -1170,10 +1358,12 @@ int Engine::l_sendRequest(lua_State * L) {
     } else {
         engine->cloudClient->request(string(lua_tostring(L, 1)), externalFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     }
+
     // delete selection
     IBusText *emptyText = ibus_text_new_from_static_string("");
     ibus_engine_commit_text((IBusEngine*) engine, emptyText);
     ibus_object_unref(emptyText);
+    engine->lastInputIsChinese = true;
     engineUpdatePreedit(engine);
     return 0; // return 0 value to lua code
 }

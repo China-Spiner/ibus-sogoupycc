@@ -28,35 +28,46 @@ namespace Configuration {
 
     // colors
     int requestingBackColor = 0xB8CFE5, requestingForeColor = INVALID_COLOR;
-    int requestedBackColor = INVALID_COLOR, requestedForeColor = 0x00C97F;
+    int requestedBackColor = INVALID_COLOR, requestedForeColor = 0x0024B2;
     int preeditBackColor = INVALID_COLOR, preeditForeColor = 0x0050FF;
-    int correctingBackColor = 0xEDBE7D, correctingForeColor = INVALID_COLOR;
+    int correctingBackColor = 0xFFB442, correctingForeColor = INVALID_COLOR;
+    int cloudCacheBackColor = INVALID_COLOR, cloudCacheForeColor = 0x0050FF;
+    int localDbBackColor = INVALID_COLOR, localDbForeColor = 0x8C8C8C;
 
     // keys
     ImeKey startCorrectionKey = IBUS_Tab,
             engModeKey = IBUS_Shift_L,
             chsModeKey = IBUS_Shift_L,
             pageDownKey = 'h',
-            pageUpKey = 'g';
+            pageUpKey = 'g',
+            quickResponseKey = IBUS_Alt_R;
 
     // boolean configs
     bool useDoublePinyin = false;
-    bool strictDoublePinyin = true;
+    bool strictDoublePinyin = false;
     bool startInEngMode = false;
     bool writeRequestCache = true;
     bool showNotification = true;
     bool preRequest = true;
     bool showCachedInPreedit = true;
     bool staticNotification = false;
+    bool fallbackUsingDb = true;
+    bool preRequestFallback = true;
+
+    // int
+    int fallbackMinCacheLength = 4;
+    int fallbackEngTolerance = 3;
 
     // pre request timeout
     double preRequestTimeout = 1.;
+    double requestTimeout = 30.;
 
     // selection timeout tolerance
     long long selectionTimout = 3LL * XUtility::MICROSECOND_PER_SECOND;
 
     // punctuations
     PunctuationMap punctuationMap;
+    string autoWidthPunctuations = ".,?:";
 
     // multi tone chineses
     size_t multiToneLimit = 2;
@@ -65,6 +76,7 @@ namespace Configuration {
     int dbResultLimit = 128, dbLengthLimit = 10;
     string dbOrder = "";
     double dbLongPhraseAdjust = 1.2;
+    double dbCompleteLongPhraseAdjust = 7;
 
     // class FullPunctuation
 
@@ -340,6 +352,10 @@ namespace Configuration {
             }
         }
         return false;
+    }
+
+    bool isPunctuationAutoWidth(char punc) {
+        return autoWidthPunctuations.find(punc) != string::npos;
     }
 
     int l_registerCommand(lua_State *L) {

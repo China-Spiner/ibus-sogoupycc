@@ -8,11 +8,11 @@
 #include "defines.h"
 #include "XUtility.h"
 #include "engine.h"
+
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
 #include <ibus.h>
-
 
 // Lua C functions
 // IMPROVE: Reconsider where should I put these lua C functions.
@@ -59,6 +59,7 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::dbResultLimit = lb.getValue("db_result_limit", Configuration::dbResultLimit);
     Configuration::dbLengthLimit = lb.getValue("db_length_limit", Configuration::dbLengthLimit);
     Configuration::dbLongPhraseAdjust = lb.getValue("db_phrase_adjust", Configuration::dbLongPhraseAdjust);
+    Configuration::dbCompleteLongPhraseAdjust = lb.getValue("db_completion_adjust", Configuration::dbCompleteLongPhraseAdjust);
     Configuration::dbOrder = string(lb.getValue("db_query_order", Configuration::dbOrder.c_str()));
 
     // colors (-1: use default)
@@ -70,10 +71,15 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::requestedBackColor = lb.getValue("responsed_back_color", Configuration::requestedBackColor);
     Configuration::correctingForeColor = lb.getValue("correcting_fore_color", Configuration::correctingForeColor);
     Configuration::correctingBackColor = lb.getValue("correcting_back_color", Configuration::correctingBackColor);
+    Configuration::cloudCacheBackColor = lb.getValue("cloud_cache_back_color", Configuration::cloudCacheBackColor);
+    Configuration::cloudCacheForeColor = lb.getValue("cloud_cache_fore_color", Configuration::cloudCacheForeColor);
+    Configuration::localDbBackColor = lb.getValue("local_cache_back_color", Configuration::localDbBackColor);
+    Configuration::localDbForeColor = lb.getValue("local_cache_fore_color", Configuration::localDbForeColor);
 
     // timeouts
     Configuration::selectionTimout = (long long) lb.getValue("sel_timeout", (double) Configuration::selectionTimout / XUtility::MICROSECOND_PER_SECOND) * XUtility::MICROSECOND_PER_SECOND;
     Configuration::preRequestTimeout = lb.getValue("pre_request_timeout", (double) Configuration::preRequestTimeout);
+    Configuration::requestTimeout = lb.getValue("request_timeout", (double) Configuration::requestTimeout);
 
     // keys
     Configuration::engModeKey.readFromLua(lb, "eng_mode_key");
@@ -81,6 +87,11 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::startCorrectionKey.readFromLua(lb, "correction_mode_key");
     Configuration::pageDownKey.readFromLua(lb, "page_down_key");
     Configuration::pageUpKey.readFromLua(lb, "page_up_key");
+    Configuration::quickResponseKey.readFromLua(lb, "quick_response_key");
+
+    // tolerances
+    Configuration::fallbackMinCacheLength = lb.getValue("fallback_min_cache_length", Configuration::fallbackMinCacheLength);
+    Configuration::fallbackEngTolerance = lb.getValue("auto_eng_tolerance", Configuration::fallbackEngTolerance);
 
     // bools
     Configuration::staticNotification = lb.getValue("static_notification", Configuration::staticNotification);
@@ -91,7 +102,9 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::showNotification = lb.getValue("show_notificaion", Configuration::showNotification);
     Configuration::preRequest = lb.getValue("pre_request", Configuration::preRequest);
     Configuration::showCachedInPreedit = lb.getValue("show_cache_preedit", Configuration::showCachedInPreedit);
-    if (Configuration::preRequest) Configuration::writeRequestCache = true;
+    Configuration::fallbackUsingDb = lb.getValue("fallback_use_db", Configuration::fallbackUsingDb);
+    Configuration::preRequestFallback = lb.getValue("fallback_pre_request", Configuration::preRequestFallback);
+    if (Configuration::preRequestFallback || Configuration::preRequest) Configuration::writeRequestCache = true;
 
     // labels used in lookup table, ibus has 16 chars limition.
     {
@@ -126,7 +139,9 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::fetcherPath = string(lb.getValue("fetcher_path", Configuration::fetcherPath.c_str()));
     Configuration::fetcherBufferSize = lb.getValue("fetcher_buffer_size", Configuration::fetcherBufferSize);
 
-    // punc map
+    // auto width punc and punc map
+    Configuration::autoWidthPunctuations = string(lb.getValue("punc_after_chinese", ".,?:"));
+
     if (lb.getValueType("punc_map") == LUA_TTABLE) {
         DEBUG_PRINT(4, "[LUABIND] read punc_map\n");
         Configuration::punctuationMap.clear();

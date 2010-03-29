@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cmath>
 #include <unistd.h>
+#include <sstream>
+#include <glib.h>
 
 #include "PinyinDatabase.h"
 #include "defines.h"
@@ -13,6 +15,9 @@
 
 #define DB_CACHE_SIZE "16384"
 #define DB_PREFETCH_LEN 6 
+
+using std::istringstream;
+using std::ostringstream;
 
 PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
     DEBUG_PRINT(1, "[PYDB] PinyinDatabase(%s, %.2lf)\n", dbPath.c_str(), weight);
@@ -69,8 +74,8 @@ void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candida
     DEBUG_PRINT(3, "[PYDB] query: %s\n", pinyins.toString().c_str());
     if (!db) return;
 
-    string queryWhere;
-    char idString[12], whereBuffer[1024], limitBuffer[32], weightBuffer[32];
+    ostringstream queryWhere;
+    ostringstream query;
     int lengthMax = lengthLimit;
 
     if (lengthMax < 0) lengthMax = 1;
@@ -83,7 +88,7 @@ void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candida
      *   SELECT phrase, freq * 2.33 AS freqadj FROM main.py_phrase_1 WHERE s0=4 AND y0=29 AND s1=4 AND y1=28
      * ) GROUP BY phrase ORDER BY freqadj DESC LIMIT 30
      */
-    string query = "SELECT phrase, freqadj FROM (";
+    query << "SELECT phrase, freqadj FROM (";
     // build query statement
     for (size_t id = 0; id < pinyins.size(); ++id) {
         // "chuang qian ming yue guang"
@@ -92,8 +97,6 @@ void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candida
         if ((int) id > lengthMax) break;
 
         string pinyin = pinyins[id];
-        snprintf(idString, sizeof (idString), "%d", id);
-        snprintf(weightBuffer, sizeof (weightBuffer), "%.4lf", pow(id + 1, longPhraseAdjust) * weight);
 
         DEBUG_PRINT(5, "[PYDB] for length = %d, pinyin = %s\n", id + 1, pinyin.c_str());
 
@@ -103,44 +106,40 @@ void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candida
         // consonant not available, stop here
         if (cid == PinyinDefines::PINYIN_ID_VOID) break;
 
+        // update WHERE sent.
+        if (!queryWhere.str().empty()) queryWhere << " AND ";
+
+        queryWhere << "s" << id << "=" << cid;
         // vowel not available, only use consonant
-        if (vid == PinyinDefines::PINYIN_ID_VOID) {
-            snprintf(whereBuffer, sizeof (whereBuffer), "s%d=%d", id, cid);
-        } else {
-            snprintf(whereBuffer, sizeof (whereBuffer), "s%d=%d AND y%d=%d", id, cid, id, vid);
+        if (vid != PinyinDefines::PINYIN_ID_VOID) {
+            queryWhere << " AND y" << id << "=" << vid;
         }
 
-        // update WHERE sent.
-        if (!queryWhere.empty()) queryWhere += " AND ";
-        queryWhere += whereBuffer;
-
         // update query
-        if (id > 0) query += " UNION ALL ";
-        query += string("SELECT phrase, freq * ") + weightBuffer +
-                " AS freqadj FROM main.py_phrase_" + idString + " WHERE " + queryWhere;
+        if (id > 0) query << " UNION ALL ";
+        query << "SELECT phrase, freq * " << pow(id + 1, longPhraseAdjust) * weight <<
+                " AS freqadj FROM main.py_phrase_" << id << " WHERE " << queryWhere.str();
     }
 
-    // build query
+    // finish constructing query
+    query << string(") GROUP BY phrase ORDER BY freqadj DESC");
     if (countLimit > 0) {
-        snprintf(limitBuffer, sizeof (limitBuffer), " LIMIT %d", countLimit);
-    } else {
-        limitBuffer[0] = '\0';
+        query << " LIMIT " << countLimit;
     }
-    query += string(") GROUP BY phrase ORDER BY freqadj DESC") + limitBuffer;
 
-    DEBUG_PRINT(5, "[PYDB] query SQL: %s\n", query.c_str());
+    DEBUG_PRINT(5, "[PYDB] query SQL: %s\n", query.str().c_str());
 
     sqlite3_stmt *stmt;
 
-    if (sqlite3_prepare_v2(db, query.c_str(), query.length(), &stmt, NULL) != SQLITE_OK) return;
+    if (sqlite3_prepare_v2(db, query.str().c_str(), query.str().length(), &stmt, NULL) != SQLITE_OK) return;
 
     for (bool running = true; running;) {
         switch (sqlite3_step(stmt)) {
             case SQLITE_ROW:
             {
-                string phase = (const char*) sqlite3_column_text(stmt, 0);
+                string phrase = (const char*) sqlite3_column_text(stmt, 0);
                 double freq = sqlite3_column_double(stmt, 1);
-                candidateList.insert(pair<double, string > (freq, phase));
+                candidateList.insert(pair<double, string > (freq, phrase));
 
                 // do not quit abnormally, use LIMIT in sql query
                 // if (limitCount > 0 && ++count >= limitCount) running = false;
@@ -171,6 +170,101 @@ void PinyinDatabase::query(const PinyinSequence& pinyins, CandidateList& candida
         }
     }
     sqlite3_finalize(stmt);
+}
+
+string PinyinDatabase::greedyConvert(const string& pinyins, const double longPhraseAdjust) {
+    return greedyConvert(PinyinSequence(pinyins), longPhraseAdjust);
+}
+
+string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double longPhraseAdjust) {
+    DEBUG_PRINT(3, "[PYDB] greedyConvert: %s\n", pinyins.toString().c_str());
+
+    // result
+    string r;
+    if (!db) return r;
+
+    // build query statement
+    for (int id = (int) pinyins.size() - 1; id >= 0;) {
+        int lengthMax = id + 1;
+        if (lengthMax > PINYIN_DB_ID_MAX) lengthMax = PINYIN_DB_ID_MAX;
+
+        ostringstream query;
+        query << "SELECT phrase, freqadj FROM (";
+
+        for (int l = lengthMax; l > 0; --l) {
+            // try construct from pinyins[id - l + 1 .. id]
+            ostringstream queryWhere;
+            for (int p = id - l + 1; p <= id; p++) {
+                string pinyin = pinyins[p];
+                int cid, vid;
+                PinyinDatabase::getPinyinIDs(pinyin, cid, vid);
+                if (!queryWhere.str().empty()) queryWhere << " AND ";
+                queryWhere << "s" << p - (id - l + 1) << "=" << cid;
+                if (vid != PinyinDefines::PINYIN_ID_VOID) queryWhere << " AND y" << p - (id - l + 1) << "=" << vid;
+            }
+            if (l != lengthMax) query << " UNION ALL ";
+            query << "SELECT phrase, freq * " << pow(l, longPhraseAdjust) <<
+                    " AS freqadj FROM main.py_phrase_" << l - 1 << " WHERE " << queryWhere.str();
+        }
+        query << string(") GROUP BY phrase ORDER BY freqadj DESC LIMIT 1");
+        //puts(query.str().c_str());
+        sqlite3_stmt *stmt;
+
+        if (sqlite3_prepare_v2(db, query.str().c_str(), query.str().length(), &stmt, NULL) != SQLITE_OK) return r;
+
+        int matchLength = 0;
+        string phrase;
+        for (bool running = true; running;) {
+            switch (sqlite3_step(stmt)) {
+                case SQLITE_ROW:
+                {
+                    // got it !
+                    phrase = (const char*) sqlite3_column_text(stmt, 0);
+                    break;
+                }
+                case SQLITE_DONE:
+                {
+                    running = false;
+                    break;
+                }
+                case SQLITE_BUSY:
+                {
+                    // sleep a short time, say, 1 ms
+                    usleep(1024);
+                }
+                case SQLITE_MISUSE:
+                {
+                    fprintf(stderr, "sqlite3_step() misused.\nthis should not happen.");
+                    running = false;
+                    break;
+                }
+                case SQLITE_ERROR: default:
+                {
+                    fprintf(stderr, "sqlite3_step() error: %s\n (ignored).\n", sqlite3_errmsg(db));
+                    running = false;
+                    break;
+                }
+            }
+        }
+        sqlite3_finalize(stmt);
+
+        matchLength = (int) g_utf8_strlen(phrase.c_str(), -1);
+
+        if (matchLength == 0) {
+            // can't convert just skip this pinyin -,-
+            r = pinyins[id] + r;
+            id--;
+        } else {
+            r = phrase + r;
+            id -= matchLength;
+        }
+
+        if (id < 0) {
+            // all finish
+            break;
+        }
+    }
+    return r;
 }
 
 string PinyinDatabase::getPinyinFromID(int consonantId, int vowelId) {

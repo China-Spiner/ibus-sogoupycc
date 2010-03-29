@@ -86,6 +86,10 @@ int main(int argc, char *argv[]) {
     // freopen("/tmp/.sgpycc.err", "w", stderr);
     //}
 
+    //PinyinDatabase db("/tmp/o.db");
+    //printf("%s\n", db.greedyConvert(PinyinSequence("wo men kan dao le ni zai na li gong zuo")).c_str());
+    //return 0;
+    
     // version
     if (argc > 1 && strstr(argv[1], "-v")) {
         printf("ibus-sogoupycc version: %s\n", VERSION);
@@ -132,7 +136,8 @@ int main(int argc, char *argv[]) {
     pthread_attr_destroy(&threadAttr);
 
     DEBUG_PRINT(1, "[MAIN] Reaching ibus_main() ...\n");
-    usleep(100);
+    // wait static config be loaded 0.1 s should be ok.
+    usleep(100000);
     ibus_main();
 
     DEBUG_PRINT(1, "[MAIN] Exiting from ibus_main() ...\n");

@@ -108,7 +108,7 @@ void PinyinCloudClient::preRequest(const string requestString, FetchFunc fetchFu
     request->fetchParam = fetchParam;
 
     DEBUG_PRINT(4, "[CLOUD] going to create thread (preRequest)\n");
-    
+
     // launch thread
     pthread_t requestThread;
     pthread_attr_t preRequestThreadAttr;
@@ -194,12 +194,11 @@ PinyinCloudClient::PinyinCloudClient() {
 }
 
 void PinyinCloudClient::readLock() {
-
     DEBUG_PRINT(2, "[CLOUD] Read lock\n");
     pthread_rwlock_rdlock(&requestsLock);
 }
 
-void PinyinCloudClient::readUnlock() {
+void PinyinCloudClient::unlock() {
     DEBUG_PRINT(2, "[CLOUD] Read unlock\n");
     pthread_rwlock_unlock(&requestsLock);
 }
@@ -235,11 +234,22 @@ void PinyinCloudClient::removeLastRequest() {
     pthread_rwlock_unlock(&requestsLock);
 }
 
+vector<PinyinCloudRequest> PinyinCloudClient::exportAndRemoveAllRequest() {
+    vector<PinyinCloudRequest> r;
+    DEBUG_PRINT(3, "[CLOUD] exportAndRemoveAllRequest\n");
+    pthread_rwlock_wrlock(&requestsLock);
+    for (size_t i = 0; i < requests.size(); ++i) {
+        r.push_back(requests[i]);
+    }
+    requests.clear();
+    pthread_rwlock_unlock(&requestsLock);
+    return r;
+}
+
 PinyinCloudClient::PinyinCloudClient(const PinyinCloudClient& orig) {
 }
 
 PinyinCloudClient::~PinyinCloudClient() {
-
     DEBUG_PRINT(1, "[CLOUD] Destroy\n");
     pthread_rwlock_destroy(&requestsLock);
 }

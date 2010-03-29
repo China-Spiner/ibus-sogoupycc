@@ -99,9 +99,11 @@ namespace Configuration {
     extern int requestedBackColor, requestedForeColor;
     extern int preeditForeColor, preeditBackColor;
     extern int correctingForeColor, correctingBackColor;
+    extern int cloudCacheForeColor, cloudCacheBackColor;
+    extern int localDbForeColor, localDbBackColor;
 
     // keys
-    extern ImeKey startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey;
+    extern ImeKey startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey, quickResponseKey;
 
     // boolean configs
     extern bool useDoublePinyin;
@@ -112,9 +114,16 @@ namespace Configuration {
     extern bool preRequest;
     extern bool showCachedInPreedit;
     extern bool staticNotification;
+    extern bool fallbackUsingDb;
+    extern bool preRequestFallback;
+
+    // tolerances
+    extern int fallbackMinCacheLength;
+    extern int fallbackEngTolerance;
 
     // pre request timeout
     extern double preRequestTimeout;
+    extern double requestTimeout;
 
     // selection timeout tolerance
     extern long long selectionTimout;
@@ -123,10 +132,12 @@ namespace Configuration {
     extern int dbResultLimit, dbLengthLimit;
     extern string dbOrder;
     extern double dbLongPhraseAdjust;
+    extern double dbCompleteLongPhraseAdjust;
 
     // half to full width punctuation map
     extern PunctuationMap punctuationMap;
-
+    extern string autoWidthPunctuations;
+    
     // multi tone limit
     extern size_t multiToneLimit;
 
@@ -136,6 +147,7 @@ namespace Configuration {
     void staticDestruct();
     void activeExtension(string label);
     bool activeExtension(unsigned keyval, unsigned keymask);
+    bool isPunctuationAutoWidth(char punctuation);
 
     // lua C functions
     /**

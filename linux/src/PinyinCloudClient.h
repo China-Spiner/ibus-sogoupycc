@@ -14,9 +14,11 @@
 
 #include <deque>
 #include <string>
+#include <vector>
 #include <pthread.h>
 
 using std::deque;
+using std::vector;
 using std::string;
 
 typedef void (*ResponseCallbackFunc)(void*);
@@ -51,7 +53,7 @@ public:
      * this should not take a long time until readUnlock() !
      */
     void readLock();
-    void readUnlock();
+    void unlock();
 
     /**
      * push a request to request queue, start a sub process to fetch result
@@ -61,7 +63,8 @@ public:
     void preRequest(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam);
     void removeFirstRequest(int count = 1);
     void removeLastRequest();
-
+    vector<PinyinCloudRequest> exportAndRemoveAllRequest();
+    
 private:
     /**
      *  this is private and should not be used.

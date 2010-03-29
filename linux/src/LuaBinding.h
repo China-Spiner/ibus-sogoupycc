@@ -32,6 +32,7 @@ public:
     LuaBinding();
 
     /**
+     * getValue usage:
      * ime.a["abc"]["1"][1][2]["bb"] : getValue("abc.1..1..2.bb", "", "ime")
      */
     string getValue(const char* varName, const char* defaultValue = "", const char* libName = LIB_NAME);
