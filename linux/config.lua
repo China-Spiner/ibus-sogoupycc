@@ -45,13 +45,14 @@ end
 -- 自动更新和加载启动脚本
 if not do_not_load_remote_script then
 	http.TIMEOUT = 5
+	os.execute("mkdir '"..ime.USERCACHEDIR.."' -p")
+	local autoload_file_path = ime.USERCACHEDIR..'/autoload.lua'
 	local ret, c = http.request('http://ibus-sogoupycc.googlecode.com/svn/trunk/startup/autoload.lua')
 	if c == 200 and ret and ret:match('ibus%-sogoupycc%-autoload%-end') then
-		local autoload_file_path = os.tmpname()
 		local autoload_file = io.open(autoload_file_path, 'w')
 		autoload_file:write(ret)
 		autoload_file:close()
-		dofile(autoload_file_path)
-		os.remove(autoload_file_path)
 	end
+	local file = io.open(autoload_file_path, 'r')
+	if file then file:close() dofile(autoload_file_path) end
 end
