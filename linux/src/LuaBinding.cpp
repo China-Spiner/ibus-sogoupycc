@@ -103,6 +103,7 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::preRequest = lb.getValue("pre_request", Configuration::preRequest);
     Configuration::showCachedInPreedit = lb.getValue("show_cache_preedit", Configuration::showCachedInPreedit);
     Configuration::fallbackUsingDb = lb.getValue("fallback_use_db", Configuration::fallbackUsingDb);
+    Configuration::useAlternativePopen = lb.getValue("strict_timeout", Configuration::useAlternativePopen);
     Configuration::preRequestFallback = lb.getValue("fallback_pre_request", Configuration::preRequestFallback);
     if (Configuration::preRequestFallback || Configuration::preRequest) Configuration::writeRequestCache = true;
 
@@ -137,7 +138,6 @@ int LuaBinding::l_applySettings(lua_State* L) {
 
     // external script path
     Configuration::fetcherPath = string(lb.getValue("fetcher_path", Configuration::fetcherPath.c_str()));
-    Configuration::fetcherBufferSize = lb.getValue("fetcher_buffer_size", Configuration::fetcherBufferSize);
 
     // auto width punc and punc map
     Configuration::autoWidthPunctuations = string(lb.getValue("punc_after_chinese", ".,?:"));

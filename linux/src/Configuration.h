@@ -92,7 +92,7 @@ namespace Configuration {
     extern string fetcherPath;
 
     // buffer size receive return string from fetcher script
-    extern int fetcherBufferSize;
+    extern const int fetcherBufferSize;
     extern int preRequestRetry;
 
     // keys used in select item in lookup table
@@ -120,6 +120,7 @@ namespace Configuration {
     extern bool staticNotification;
     extern bool fallbackUsingDb;
     extern bool preRequestFallback;
+    extern bool useAlternativePopen;
 
     // tolerances
     extern int fallbackEngTolerance;

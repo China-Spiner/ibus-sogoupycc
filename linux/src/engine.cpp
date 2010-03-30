@@ -7,9 +7,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include <sstream>
 #include <cassert>
 #include <vector>
-#include <bits/stl_vector.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 #include "defines.h"
 #include "engine.h"
@@ -22,6 +27,7 @@ typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
 
 using std::vector;
 using std::string;
+using std::istringstream;
 using Configuration::PunctuationMap;
 using Configuration::ImeKey;
 
@@ -811,6 +817,8 @@ engineProcessKeyEventStart:
                         if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
                         else preRequestString = ps.toString(0, ps.size() - 1);
 
+                        *engine->lastPreRequestString = preRequestString;
+                        engine->preRequestRetry = Configuration::preRequestRetry;
                         PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
                     }
                     // now inputing chineses
@@ -1187,86 +1195,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     ENGINE_MUTEX_UNLOCK;
 }
 
-// callback by PinyinCloudClient
-
-static void preRequestCallback(IBusSgpyccEngine* engine) {
-    engineUpdatePreedit(engine);
-    // send next pre-request
-    if (Configuration::preRequest && !engine->activePreedit->empty()) {
-        // send prerequest if user need
-        // handle case: wo ', if last pinyin is partial, do not perform prerequest
-        string preRequestString;
-        PinyinSequence ps = *engine->activePreedit;
-
-        if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
-        else preRequestString = ps.toString(0, ps.size() - 1);
-
-        if (engine->lastPreRequestString == preRequestString) {
-            if (engine->preRequestRetry > 0) engine->preRequestRetry--;
-        } else {
-            engine->preRequestRetry = Configuration::preRequestRetry;
-        }
-        
-        if (engine->preRequestRetry > 0 && Configuration::getGlobalCache(preRequestString, false).empty()) {
-            PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
-        }
-    }
-}
-
-string externalFetcher(void* data, const string & requestString) {
-    IBusSgpyccEngine* engine = (typeof (engine)) data;
-    DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
-
-    string res = getRequestCache(engine, requestString);
-
-    if (res.empty()) {
-        char response[Configuration::fetcherBufferSize];
-
-        // for statistics
-        long long startMicrosecond = XUtility::getCurrentTime();
-        char timeLimitBuffer[64];
-        snprintf(timeLimitBuffer, sizeof (timeLimitBuffer), " '-%.2lf'", Configuration::requestTimeout);
-
-        FILE* fresponse = popen(string((Configuration::fetcherPath) + " '" + requestString + "'" + timeLimitBuffer).c_str(), "r");
-        // IMPROVE: pipe may be empty and closed during this read (say, a empty fetcher script)
-        // this will cause program to stop.
-
-        // fgets may read '\n' in, remove it.
-        fgets(response, sizeof (response), fresponse);
-        pclose(fresponse);
-        for (int p = strlen(response) - 1; p >= 0; p--) {
-            if (response[p] == '\n') response[p] = 0;
-            else break;
-        }
-
-        // update statistics
-        totalRequestCount++;
-        double requestTime = (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
-        totalResponseTime += requestTime;
-        if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
-
-        // try read cache, or use local db if fails
-        if ((res = response).empty()) res = getRequestCache(engine, requestString);
-
-        if (res.empty()) {
-            // empty, means fails
-            totalFailedRequestCount++;
-            // try local db, no lock here because db is not allowed to unload currently
-            if (Configuration::fallbackUsingDb && LuaBinding::pinyinDatabases.size() > 0) {
-                res = getGreedyLocalCovert(engine, requestString);
-            } else {
-                // try partial convert
-                res = getPartialCacheConvert(engine, requestString);
-            }
-        } else {
-            if (Configuration::writeRequestCache && requestString != res) {
-
-                writeRequestCache(engine, requestString, res);
-            }
-        }
-    }
-    return res;
-}
+// request cache read and write
 
 static const string getRequestCache(IBusSgpyccEngine* engine, const string& requestString, const bool includeWeak) {
     string content = engine->luaBinding->getValue(requestString.c_str(), "", "request_cache");
@@ -1288,6 +1217,222 @@ static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSri
     }
 }
 
+// callback by PinyinCloudClient
+
+static void preRequestCallback(IBusSgpyccEngine* engine) {
+    engineUpdatePreedit(engine);
+    // send next pre-request
+    if (Configuration::preRequest && !engine->activePreedit->empty()) {
+        // send prerequest if user need
+        // handle case: wo ', if last pinyin is partial, do not perform prerequest
+        string preRequestString;
+        PinyinSequence ps = *engine->activePreedit;
+
+        if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
+        else preRequestString = ps.toString(0, ps.size() - 1);
+
+        if (*engine->lastPreRequestString == preRequestString) {
+            if (engine->preRequestRetry > 0) engine->preRequestRetry--;
+        } else {
+            engine->preRequestRetry = Configuration::preRequestRetry;
+            *engine->lastPreRequestString = preRequestString;
+        }
+        
+        if (engine->preRequestRetry > 0 && Configuration::getGlobalCache(preRequestString, false).empty()) {
+            PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
+        }
+    }
+}
+
+// alternative popen impl. by me with timeout control
+
+/**
+ * popen2 function originally by chipx86 on Tue Jan 10 23:40:00 -0500 2006
+ * http://snippets.dzone.com/posts/show/1134
+ */
+pid_t popen2(const char *command, int *infd, int *outfd) {
+    const int WRITE = 1, READ = WRITE ^ 1;
+    int pIn[2], pOut[2];
+    pid_t pid;
+
+    if (pipe(pIn) != 0 || pipe(pOut) != 0) return -1;
+
+    pid = fork();
+
+    if (pid < 0) return pid; // error
+    if (pid == 0) {
+        close(pIn[WRITE]);
+        close(pOut[READ]);
+        dup2(pIn[READ], READ); // dup2 already close the first fd.
+        dup2(pOut[WRITE], WRITE);
+
+        execl("/bin/sh", "sh", "-c", command, NULL);
+        perror("fail to exec @ popen2");
+        exit(EXIT_FAILURE);
+    }
+
+    infd ? (*infd = pIn[WRITE]) : close(pIn[WRITE]);
+    outfd ? (*outfd = pOut[READ]) : close(pOut[READ]);
+
+    close(pIn[READ]);
+    close(pOut[WRITE]);
+
+    return pid;
+}
+
+void killProcessTree(pid_t pid, int sig = SIGTERM) {
+    // stupid method to look into /proc and find all children procresses
+    // it is a union-set problem if we only want to look /proc once to decide
+    // what processes to be killed.
+    // currently not using union-set method because it will normally
+    // introduce STL map/set ...
+
+    DIR *dir;
+    struct dirent *dirEntry;
+
+    if ((dir = opendir("/proc")) == NULL) {
+        perror("can't access /proc");
+        return; // not a fatal error
+    }
+
+    while ((dirEntry = readdir(dir)) != NULL) {
+        if (dirEntry->d_name[0] != '.') {
+            char filename[strlen(dirEntry->d_name) + sizeof ("/proc//stat")];
+            snprintf(filename, sizeof (filename), "/proc/%s/stat", dirEntry->d_name);
+            FILE *statFile = fopen(filename, "r");
+            if (statFile) {
+                int ppid, currentPid;
+                // 4th value is ppid (2.6.32), may change when kernel upgrades
+                sscanf(dirEntry->d_name, "%d", &currentPid);
+                fscanf(statFile, "%*s %*s %*s %d", &ppid);
+                if (ppid == pid) {
+                    // recusively kill
+                    killProcessTree(currentPid, sig);
+                }
+                fclose(statFile);
+            }
+        }
+    }
+    kill(pid, sig);
+    closedir(dir);
+}
+
+
+// Timed output fetcher
+// @param timeout timeout in usec (1e-6 sec), if less than or equal to 0, use trad popen() no timeout
+// @return output in limited time
+
+const string getExecuteOutputWithTimeout(const string command, const long long timeoutUsec = -1) {
+    DEBUG_PRINT(2, "[ENGINE] getExecuteOutputWithTimeout(%s, %lld)\n", command.c_str(), timeoutUsec);
+    string output = "";
+
+    if (timeoutUsec > 0) {
+        int infd, outfd;
+        pid_t pidCommand;
+
+        if ((pidCommand = popen2(command.c_str(), &infd, &outfd)) <= 0) return output;
+        // write(infd, "", 0); // reserved, if input is required one day
+        close(infd);
+
+        pid_t pidTimer;
+        pidTimer = fork();
+        if (pidTimer == 0) {
+            sleep(timeoutUsec / 1000000);
+            usleep(timeoutUsec % 1000000);
+            killProcessTree(pidCommand, SIGTERM);
+            // NOTE: must kill entire process tree, otherwise sub processes
+            // will hold outfp and readBytes = read() will be blocking!
+            return 0;
+        }
+
+        // get response
+        char receiveBuffer[4096];
+        int readBytes;
+        receiveBuffer[0] = 0;
+
+        while ((readBytes = read(outfd, receiveBuffer, sizeof (receiveBuffer) - 1)) > 0) {
+            receiveBuffer[readBytes] = 0;
+            output += receiveBuffer;
+        }
+        kill(pidTimer, SIGKILL);
+
+        // clean zombies, they should be already killed.
+        waitpid(pidCommand, NULL, 0);
+        waitpid(pidTimer, NULL, 0);
+    } else {
+        // use traditional popen
+        FILE* fresponse = popen(command.c_str(), "r");
+        char response[Configuration::fetcherBufferSize];
+        // NOTE: pipe may be empty and closed during this read (say, a empty fetcher script)
+        // this may cause program to stop.
+        while (!feof(fresponse)) {
+            fgets(response, sizeof (response), fresponse);
+            output += response;
+        }
+        pclose(fresponse);
+    }
+    return output;
+}
+
+
+// kinds of fetchers callback by PinyinCloudClient
+
+string externalFetcher(void* data, const string & requestString) {
+    IBusSgpyccEngine* engine = (typeof (engine)) data;
+    DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
+
+    string res = getRequestCache(engine, requestString);
+
+    if (res.empty()) {
+        // for statistics
+        long long startMicrosecond = XUtility::getCurrentTime();
+        char timeLimitBuffer[64];
+        snprintf(timeLimitBuffer, sizeof (timeLimitBuffer), " '-%.4lf'", Configuration::requestTimeout);
+
+        istringstream content(getExecuteOutputWithTimeout
+                (string((Configuration::fetcherPath) + " '" + requestString + "'" + timeLimitBuffer),
+                Configuration::useAlternativePopen ?
+                (long long) (Configuration::requestTimeout * XUtility::MICROSECOND_PER_SECOND) : -1));
+
+        for (string line; getline(content, line);) {
+            if (line.empty()) continue;
+            if (res.empty()) {
+                // first result should be full convert result
+                res = line;
+                continue;
+            }
+            // TODO: store in word list
+        }
+
+        // update statistics
+        totalRequestCount++;
+        double requestTime = (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
+        totalResponseTime += requestTime;
+        if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
+
+        // try read cache, or use local db if fails
+        if (res.empty()) res = getRequestCache(engine, requestString);
+
+        if (res.empty()) {
+            // empty, means fails
+            totalFailedRequestCount++;
+            // try local db, no lock here because db is not allowed to unload currently
+            if (Configuration::fallbackUsingDb && LuaBinding::pinyinDatabases.size() > 0) {
+                res = getGreedyLocalCovert(engine, requestString);
+            } else {
+                // try partial convert
+                res = getPartialCacheConvert(engine, requestString);
+            }
+        } else {
+            if (Configuration::writeRequestCache && requestString != res) {
+
+                writeRequestCache(engine, requestString, res);
+            }
+        }
+    }
+    return res;
+}
+
 static string directFetcher(void* data, const string & requestString) {
     DEBUG_PRINT(2, "[ENGINE] directFunc(%s)\n", requestString.c_str());
 
@@ -1302,24 +1447,28 @@ static string preFetcher(void* data, const string& requestString) {
 
     if (res.empty()) {
         char timeLimitBuffer[64];
-        char response[Configuration::fetcherBufferSize];
+        snprintf(timeLimitBuffer, sizeof (timeLimitBuffer), " '-%.4lf'", Configuration::preRequestTimeout);
 
         // for statistics
         long long startMicrosecond = XUtility::getCurrentTime();
 
-        snprintf(timeLimitBuffer, sizeof (timeLimitBuffer), " '%.2lf'", Configuration::preRequestTimeout);
-        FILE* fresponse = popen(string((Configuration::fetcherPath) + " '" + requestString + "'" + timeLimitBuffer).c_str(), "r");
+        // can't use is co = xx, but is co(xx) ... look up C++ standard ?
+        istringstream content(getExecuteOutputWithTimeout
+                (string((Configuration::fetcherPath) + " '" + requestString + "'" + timeLimitBuffer),
+                Configuration::useAlternativePopen ?
+                (long long) (Configuration::preRequestTimeout * XUtility::MICROSECOND_PER_SECOND) : -1));
 
-        // fgets may read '\n' in, remove it.
-        fgets(response, sizeof (response), fresponse);
-        pclose(fresponse);
-
-        for (int p = strlen(response) - 1; p >= 0; p--) {
-            if (response[p] == '\n') response[p] = 0;
-            else break;
+        for (string line; getline(content, line);) {
+            if (line.empty()) continue;
+            if (res.empty()) {
+                // first result should be full convert result
+                res = line;
+                continue;
+            }
+            // TODO: store in word list ?
         }
 
-        if ((res = response).empty()) {
+        if (res.empty()) {
             res = getRequestCache(engine, requestString, true);
             if (res.empty()) {
                 if (Configuration::preRequestFallback) {

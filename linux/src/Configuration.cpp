@@ -21,7 +21,7 @@ namespace Configuration {
     string fetcherPath = PKGDATADIR "/fetcher";
 
     // buffer size receive return string from fetcher script
-    int fetcherBufferSize = 1024;
+    const int fetcherBufferSize = 1024;
 
     // keys used in select item in lookup table
     vector<ImeKey> tableLabelKeys;
@@ -53,6 +53,7 @@ namespace Configuration {
     bool staticNotification = false;
     bool fallbackUsingDb = true;
     bool preRequestFallback = true;
+    bool useAlternativePopen = true;
 
     // int
     int fallbackEngTolerance = 3;
@@ -60,7 +61,7 @@ namespace Configuration {
 
     // pre request timeout
     double preRequestTimeout = 0.7;
-    double requestTimeout = 30.;
+    double requestTimeout = 12.;
 
     // selection timeout tolerance
     long long selectionTimout = 3LL * XUtility::MICROSECOND_PER_SECOND;
