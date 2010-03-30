@@ -28,6 +28,7 @@ typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
 using std::vector;
 using std::string;
 using std::istringstream;
+using std::ostringstream;
 using Configuration::PunctuationMap;
 using Configuration::ImeKey;
 
@@ -123,10 +124,11 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *prop_nam
 
 static void engineUpdatePreedit(IBusSgpyccEngine *engine);
 static void engineUpdateProperties(IBusSgpyccEngine * engine);
+static void engineUpdateAuxiliaryText(IBusSgpyccEngine * engine, string prefix = "");
 
 // inline procedures
 inline static void engineClearLookupTable(IBusSgpyccEngine *engine);
-inline static void engineAppendLookupTable(IBusSgpyccEngine *engine, IBusText *candidate);
+inline static void engineAppendLookupTable(IBusSgpyccEngine *engine, const string& candidate, int color = INVALID_COLOR);
 
 // fetcher functions (callback by cloudClient)
 static string directFetcher(void* data, const string& requestString);
@@ -143,6 +145,7 @@ static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSri
 static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const string& pinyins, string* remainingPinyins = NULL, const bool includeWeak = false);
 static const vector<string> getPartialCacheConverts(IBusSgpyccEngine* engine, const string& pinyins);
 static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string& pinyins);
+static const vector<string> queryCloudMemoryDatabase(const string& pinyins);
 
 inline void ibus_object_unref(gpointer object) {
 #if !IBUS_CHECK_VERSION(1, 3, 0)
@@ -246,6 +249,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
 
 
     // lookup table
+    engine->candicateCount = 0;
     engine->lookupTableLabelCount = Configuration::tableLabelKeys.size();
     engine->table = ibus_lookup_table_new(engine->lookupTableLabelCount, 0, 0, 0);
 #if IBUS_CHECK_VERSION(1, 3, 0)
@@ -325,8 +329,17 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
 // ibus_lookup_table_get_number_of_candidates() is not available in ibus-1.2.0.20090927, provided by ubuntu 9.10
 // use these inline functions as alternative
 
-inline static void engineAppendLookupTable(IBusSgpyccEngine *engine, IBusText *candidate) {
-    ibus_lookup_table_append_candidate(engine->table, candidate);
+inline static void engineAppendLookupTable(IBusSgpyccEngine *engine, const string& candidate, int color) {
+    IBusText* candidateText = ibus_text_new_from_string(candidate.c_str());
+
+    if (color != INVALID_COLOR) {
+        candidateText->attrs = ibus_attr_list_new();
+        ibus_attr_list_append(candidateText->attrs,
+                ibus_attr_foreground_new(color, 0, ibus_text_get_length(candidateText)));
+    }
+    ibus_lookup_table_append_candidate(engine->table, candidateText);
+    ibus_object_unref(candidateText);
+
     engine->candicateCount++;
 }
 
@@ -423,24 +436,6 @@ engineProcessKeyEventStart:
                     // invalid option, ignore
                     // IMPROVE: beep
                     res = TRUE;
-                } else if (candidate->attrs->attributes->len > 0) {
-                    // underlined, need 2nd select
-                    // build new table according to selected
-                    int l = ibus_text_get_length(candidate);
-                    // backup candidate before clear table
-                    IBusText *candidateCharacters = ibus_text_new_from_string(candidate->text);
-                    const gchar *utf8char = candidateCharacters->text;
-                    engineClearLookupTable(engine);
-
-                    for (int i = 0; i < l; ++i) {
-                        IBusText *candidateCharacter = ibus_text_new_from_unichar(g_utf8_get_char(utf8char));
-                        engineAppendLookupTable(engine, candidateCharacter);
-                        ibus_object_unref(candidateCharacter);
-                        if (i < l - 1) utf8char = g_utf8_next_char(utf8char);
-                    }
-                    ibus_object_unref(candidateCharacters);
-                    engine->tablePageNumber = 0;
-                    res = TRUE;
                 } else {
                     // user select a phrase, commit it
                     int length = g_utf8_strlen(candidate->text, -1);
@@ -470,13 +465,10 @@ engineProcessKeyEventStart:
             // according to dbOrder
             engineClearLookupTable(engine);
 
-            // default: use external dict if possible
+            // default: use external dict / cloud results if possible
             string dbOrder = Configuration::dbOrder;
-            if (dbOrder.empty()) {
-                if (LuaBinding::pinyinDatabases.size() > 0) dbOrder = "cd";
-                else dbOrder = "2";
-            }
 
+            // construct cand items
             set<string> candidateSet;
             for (const char *dbo = dbOrder.c_str(); *dbo; ++dbo)
                 switch (*dbo) {
@@ -484,21 +476,15 @@ engineProcessKeyEventStart:
                     {
                         // gb2312 internal db
                         string character = (*engine->correctings)[0];
+                        string candidateCharacters;
                         // correct character
                         if (PinyinUtility::isRecognisedCharacter(character)) {
+                            // get all tones
                             for (size_t i = 0;; i++) {
                                 string pinyin = PinyinUtility::charactersToPinyins(character, i, false);
                                 if (pinyin.empty()) break;
-                                for (int tone = 1; tone <= 5; ++tone) {
-                                    // IMPROVE: partical pinyin won't work here
-                                    IBusText* candidate = ibus_text_new_from_string((PinyinUtility::getCandidates(pinyin, tone)).c_str());
-                                    if (ibus_text_get_length(candidate) > 1) {
-                                        candidate->attrs = ibus_attr_list_new();
-                                        ibus_attr_list_append(candidate->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, 0, ibus_text_get_length(candidate)));
-                                    }
-                                    engineAppendLookupTable(engine, candidate);
-                                    ibus_object_unref(candidate);
-                                }
+                                for (int tone = 1; tone <= 5; ++tone)
+                                    candidateCharacters += PinyinUtility::getCandidates(pinyin, tone);
                             }
                         }
                         // pinyin ( user selecting )
@@ -506,27 +492,47 @@ engineProcessKeyEventStart:
                             string pinyin = character;
                             for (int tone = 1; tone <= 5; ++tone) {
                                 // IMPROVE: partical pinyin won't work here
-                                IBusText* candidate = ibus_text_new_from_string((PinyinUtility::getCandidates(pinyin, tone)).c_str());
-                                if (ibus_text_get_length(candidate) > 1) {
-                                    candidate->attrs = ibus_attr_list_new();
-                                    ibus_attr_list_append(candidate->attrs, ibus_attr_underline_new(IBUS_ATTR_UNDERLINE_SINGLE, 0, ibus_text_get_length(candidate)));
-                                }
-                                engineAppendLookupTable(engine, candidate);
-                                ibus_object_unref(candidate);
+                                candidateCharacters += PinyinUtility::getCandidates(pinyin, tone);
                             }
+                        }
+
+                        // add to cand list
+                        int length = g_utf8_strlen(candidateCharacters.c_str(), -1);
+                        const gchar *utf8char = candidateCharacters.c_str();
+                        for (int i = 0; i < length; ++i) {
+                            IBusText *candidateCharacter = ibus_text_new_from_unichar(g_utf8_get_char(utf8char));
+                            if (candidateSet.find(string(candidateCharacter->text)) == candidateSet.end()) {
+                                // ok, add it
+                                candidateSet.insert(string(candidateCharacter->text));
+                                engineAppendLookupTable(engine, string(candidateCharacter->text), Configuration::internalCandicateColor);
+                            }
+                            ibus_object_unref(candidateCharacter);
+                            if (i < length - 1) utf8char = g_utf8_next_char(utf8char);
                         }
                         break;
                     }
                     case 'c':
                     {
-                        // request cache
+                        if (!PinyinUtility::isValidPartialPinyin(engine->correctings->operator [](0))) break;
+                        // from request cache
                         vector<string> partialCaches = getPartialCacheConverts(engine, engine->correctings->toString());
                         for (vector<string>::iterator it = partialCaches.begin(); it != partialCaches.end(); ++it) {
                             if (candidateSet.find(*it) == candidateSet.end()) {
                                 candidateSet.insert(*it);
-                                IBusText* candidateText = ibus_text_new_from_string(it->c_str());
-                                engineAppendLookupTable(engine, candidateText);
-                                ibus_object_unref(candidateText);
+                                engineAppendLookupTable(engine, *it, Configuration::cloudCacheCandicateColor);
+                            }
+                        }
+                        break;
+                    }
+                    case 'w':
+                    {
+                        if (!PinyinUtility::isValidPartialPinyin(engine->correctings->operator [](0))) break;
+                        // words from cloud
+                        vector<string> words = queryCloudMemoryDatabase(engine->correctings->toString());
+                        for (vector<string>::iterator it = words.begin(); it != words.end(); ++it) {
+                            if (candidateSet.find(*it) == candidateSet.end()) {
+                                candidateSet.insert(*it);
+                                engineAppendLookupTable(engine, *it, Configuration::cloudWordsCandicateColor);
                             }
                         }
                         break;
@@ -548,34 +554,22 @@ engineProcessKeyEventStart:
                             if (candidateSet.find(candidate) == candidateSet.end()) {
                                 candidateSet.insert(candidate);
 
-                                IBusText* candidateText = ibus_text_new_from_string(candidate.c_str());
-                                engineAppendLookupTable(engine, candidateText);
-                                ibus_object_unref(candidateText);
+                                engineAppendLookupTable(engine, candidate, Configuration::databaseCandicateColor);
                             }
-                        }
-                        if (candidateSet.size() == 0) {
-                            // put a dummy one
-                            IBusText* dummyCandidate = ibus_text_new_from_string("?");
-                            engineAppendLookupTable(engine, dummyCandidate);
-                            ibus_object_unref(dummyCandidate);
                         }
                         break;
                     }
                 } // for dborder
             // still zero result? put a dummy one
             if (engine->candicateCount == 0) {
-                IBusText* dummyCandidate = ibus_text_new_from_string("-");
-                engineAppendLookupTable(engine, dummyCandidate);
-                ibus_object_unref(dummyCandidate);
+                engineAppendLookupTable(engine, (*engine->correctings)[0]);
             }
-            IBusText* text = ibus_text_new_from_string((*engine->correctings)[0].c_str());
-            ibus_engine_update_auxiliary_text((IBusEngine*) engine, text, TRUE);
-            ibus_object_unref(text);
             engine->tablePageNumber = 0;
+            engineUpdateAuxiliaryText(engine, (*engine->correctings)[0]);
+
             res = TRUE;
         }
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
-
     } else {
         // not in correction mode :p
 
@@ -954,21 +948,30 @@ static void engineSetCapabilities(IBusSgpyccEngine *engine, guint caps) {
 #endif
 }
 
+static void engineUpdateAuxiliaryText(IBusSgpyccEngine * engine, string prefix) {
+    ostringstream auxiliaryText;
+    guint pageCount = (engine->candicateCount + ibus_lookup_table_get_page_size(engine->table) - 1) / ibus_lookup_table_get_page_size(engine->table);
+    auxiliaryText << prefix << "  " << engine->tablePageNumber + 1 << " / " << pageCount;
+    IBusText* text = ibus_text_new_from_string(auxiliaryText.str().c_str());
+    ibus_engine_update_auxiliary_text((IBusEngine*) engine, text, TRUE);
+    ibus_object_unref(text);
+}
+
 static void enginePageUp(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] PageUp\n");
     if (!engine->correctings->empty()) {
-
         if (ibus_lookup_table_page_up(engine->table)) engine->tablePageNumber--;
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
+        engineUpdateAuxiliaryText(engine, (*engine->correctings)[0]);
     }
 }
 
 static void enginePageDown(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] PageDown\n");
     if (!engine->correctings->empty()) {
-
         if (ibus_lookup_table_page_down(engine->table)) engine->tablePageNumber++;
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
+        engineUpdateAuxiliaryText(engine, (*engine->correctings)[0]);
     }
 }
 
@@ -999,8 +1002,7 @@ static const vector<string> getPartialCacheConverts(IBusSgpyccEngine* engine, co
     for (size_t i = ps.size(); i > 0; i--) {
         if (i < ps.size() || PinyinUtility::isValidPinyin(ps[i - 1])) {
             string cache = getRequestCache(engine, ps.toString(0, i));
-            if (!cache.empty() && (lastCacheFound.find(cache) == string::npos || lastCacheFound.length() - cache.length() > 10)) {
-
+            if (!cache.empty() && (lastCacheFound.find(cache) == string::npos)) {
                 r.push_back(cache);
                 lastCacheFound = cache;
             }
@@ -1043,6 +1045,17 @@ static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string&
     partialConvertedCharacters = getPartialCacheConvert(engine, pinyins, &remainingPinyins);
     return LuaBinding::pinyinDatabases.begin()->second->
             greedyConvert(pinyins, Configuration::dbCompleteLongPhraseAdjust);
+}
+
+static const vector<string> queryCloudMemoryDatabase(const string& pinyins) {
+    vector<string> r;
+    PinyinSequence ps = pinyins;
+    if (!PinyinUtility::isValidPartialPinyin(ps[0])) return r;
+    for (size_t i = ps.size(); i > 1; i--) {
+        vector<string> t = PinyinCloudClient::queryMemoryDatabase(ps.toString(0, i));
+        r.insert(r.end(), t.begin(), t.end());
+    }
+    return r;
 }
 
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
@@ -1237,7 +1250,7 @@ static void preRequestCallback(IBusSgpyccEngine* engine) {
             engine->preRequestRetry = Configuration::preRequestRetry;
             *engine->lastPreRequestString = preRequestString;
         }
-        
+
         if (engine->preRequestRetry > 0 && Configuration::getGlobalCache(preRequestString, false).empty()) {
             PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
         }
@@ -1246,10 +1259,9 @@ static void preRequestCallback(IBusSgpyccEngine* engine) {
 
 // alternative popen impl. by me with timeout control
 
-/**
- * popen2 function originally by chipx86 on Tue Jan 10 23:40:00 -0500 2006
- * http://snippets.dzone.com/posts/show/1134
- */
+// popen2 function originally by chipx86 on Tue Jan 10 23:40:00 -0500 2006
+// http://snippets.dzone.com/posts/show/1134
+
 pid_t popen2(const char *command, int *infd, int *outfd) {
     const int WRITE = 1, READ = WRITE ^ 1;
     int pIn[2], pOut[2];
@@ -1384,10 +1396,13 @@ string externalFetcher(void* data, const string & requestString) {
     string res = getRequestCache(engine, requestString);
 
     if (res.empty()) {
-        // for statistics
-        long long startMicrosecond = XUtility::getCurrentTime();
+        PinyinSequence ps = requestString;
+
         char timeLimitBuffer[64];
         snprintf(timeLimitBuffer, sizeof (timeLimitBuffer), " '-%.4lf'", Configuration::requestTimeout);
+
+        // timing, for statistics
+        long long startMicrosecond = XUtility::getCurrentTime();
 
         istringstream content(getExecuteOutputWithTimeout
                 (string((Configuration::fetcherPath) + " '" + requestString + "'" + timeLimitBuffer),
@@ -1401,7 +1416,11 @@ string externalFetcher(void* data, const string & requestString) {
                 res = line;
                 continue;
             }
-            // TODO: store in word list
+            size_t length = g_utf8_strlen(line.c_str(), -1);
+            if (length > 1) {
+                // store word ( > 1 char) provided by cloud server
+                PinyinCloudClient::addToMemoryDatabase(ps.toString(0, length), line);
+            }
         }
 
         // update statistics
@@ -1449,6 +1468,8 @@ static string preFetcher(void* data, const string& requestString) {
         char timeLimitBuffer[64];
         snprintf(timeLimitBuffer, sizeof (timeLimitBuffer), " '-%.4lf'", Configuration::preRequestTimeout);
 
+        PinyinSequence ps = requestString;
+
         // for statistics
         long long startMicrosecond = XUtility::getCurrentTime();
 
@@ -1465,7 +1486,11 @@ static string preFetcher(void* data, const string& requestString) {
                 res = line;
                 continue;
             }
-            // TODO: store in word list ?
+            size_t length = g_utf8_strlen(line.c_str(), -1);
+            if (length > 1) {
+                // store word ( > 1 char) provided by cloud server
+                PinyinCloudClient::addToMemoryDatabase(ps.toString(0, length), line);
+            }
         }
 
         if (res.empty()) {
@@ -1516,8 +1541,9 @@ int Engine::l_commitText(lua_State * L) {
     DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
     luaL_checkstring(L, 1);
     IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
-    if (engine)
-        engine->cloudClient->request(string(lua_tostring(L, 1)), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+    if (!engine || !engine->enabled) return 0;
+
+    engine->cloudClient->request(string(lua_tostring(L, 1)), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
     engine->lastInputIsChinese = false;
 
     return 0; // return 0 value to lua code
@@ -1527,7 +1553,7 @@ int Engine::l_sendRequest(lua_State * L) {
     luaL_checkstring(L, 1);
     DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
     IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
-    if (!engine) return 0;
+    if (!engine || !engine->enabled) return 0;
 
     engine->requesting = true;
     if (lua_type(L, 2) == LUA_TSTRING) {
@@ -1543,7 +1569,8 @@ int Engine::l_sendRequest(lua_State * L) {
     IBusText *emptyText = ibus_text_new_from_static_string("");
     ibus_engine_commit_text((IBusEngine*) engine, emptyText);
     ibus_object_unref(emptyText);
-    engine->lastInputIsChinese = true;
-    engineUpdatePreedit(engine);
+    // engine->lastInputIsChinese = true;
+    // engineUpdatePreedit(engine);
+    
     return 0; // return 0 value to lua code
 }

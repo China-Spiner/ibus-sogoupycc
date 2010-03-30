@@ -39,10 +39,14 @@ function try_convert(tail, tail_len)
 		local ret = http.request('http://web.pinyin.sogou.com/api/py?key='..key..'&query='..py..py_tail)
 		local res = ret and ret:match('ime_callback%("(.-)"')
 		if res then
-			local content = url.unescape(res):match('(.-)：')
-			if content and #content > 2 then
+			local content = url.unescape(res)
+			local first_word = content:match('(.-)：')
+			if first_word and #first_word > 2 then
 				-- test usage: math.randomseed(os.time()) socket.sleep(math.random(20)) 
-				io.write(content:sub(1, #content - 3 * tail_len))
+				io.write(first_word:sub(1, #content - 3 * tail_len), '\n')
+				for word in content:gmatch('+(.-)：') do
+					io.write(word, '\n')
+				end
 				return 1
 			else
 				-- not a valid return (still HTTP200 could happen (started in Mar 19 2010, annoying!))

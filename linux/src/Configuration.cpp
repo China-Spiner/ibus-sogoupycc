@@ -33,6 +33,10 @@ namespace Configuration {
     int correctingBackColor = 0xFFB442, correctingForeColor = INVALID_COLOR;
     int cloudCacheBackColor = INVALID_COLOR, cloudCacheForeColor = 0x0050FF;
     int localDbBackColor = INVALID_COLOR, localDbForeColor = 0x8C8C8C;
+    int cloudCacheCandicateColor = 0x0050FF;
+    int cloudWordsCandicateColor = 0x00A811;
+    int databaseCandicateColor = INVALID_COLOR;
+    int internalCandicateColor = 0x8C8C8C;
 
     // keys
     ImeKey startCorrectionKey = IBUS_Tab,
@@ -75,7 +79,7 @@ namespace Configuration {
 
     // database confs
     int dbResultLimit = 128, dbLengthLimit = 10;
-    string dbOrder = "";
+    string dbOrder = "cd2";
     double dbLongPhraseAdjust = 1.2;
     double dbCompleteLongPhraseAdjust = 4;
 

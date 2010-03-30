@@ -16,10 +16,12 @@
 #include <string>
 #include <vector>
 #include <pthread.h>
+#include <map>
 
 using std::deque;
 using std::vector;
 using std::string;
+using std::multimap;
 
 typedef void (*ResponseCallbackFunc)(void*);
 typedef string(*FetchFunc)(void*, const string&);
@@ -64,7 +66,12 @@ public:
     void removeFirstRequest(int count = 1);
     void removeLastRequest();
     vector<PinyinCloudRequest> exportAndRemoveAllRequest();
-    
+
+    static void staticInit();
+    static void staticDestruct();
+
+    static vector<string> queryMemoryDatabase(const string& pinyins);
+    static void addToMemoryDatabase(const string& pinyins, const string& content);
 private:
     /**
      *  this is private and should not be used.
@@ -76,7 +83,10 @@ private:
     deque<PinyinCloudRequest> requests;
     pthread_rwlock_t requestsLock;
     unsigned int nextRequestId;
+
+    static pthread_rwlock_t cloudMemoryDatabaseLock;
     static bool preRequestBusy;
+    static multimap<string, string> cloudMemoryDatabase;
 };
 
 

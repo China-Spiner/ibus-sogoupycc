@@ -79,18 +79,7 @@ void* staticInitThreadFunc(void*) {
     return NULL;
 }
 
-int main(int argc, char *argv[]) {
-    // redirect output ( for debugging )
-    //if (getenv("SGPYZCC_REDIRECT_OUTPUT")) {
-    // freopen("/tmp/.sgpycc.out", "w", stdout);
-    // freopen("/tmp/.sgpycc.err", "w", stderr);
-    //}
-
-    //PinyinDatabase db("/tmp/o.db");
-    //printf("%s\n", db.greedyConvert(PinyinSequence("wo men kan dao le ni zai na li gong zuo")).c_str());
-    //return 0;
-    globalDebugLevel = 3;
-    
+int main(int argc, char *argv[]) {  
     // version
     if (argc > 1 && strstr(argv[1], "-v")) {
         printf("ibus-sogoupycc version: %s\n", VERSION);
@@ -119,8 +108,10 @@ int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
     // global configuration init, be first
+    PinyinCloudClient::staticInit();
     LuaBinding::staticInit();
     Configuration::staticInit();
+    
 
     // simple argc parser
     ibusRegister(argc > 1 && strstr(argv[1], "-i"));
@@ -147,6 +138,7 @@ int main(int argc, char *argv[]) {
     XUtility::staticDestruct();
     LuaBinding::staticDestruct();
     Configuration::staticDestruct();
+    PinyinCloudClient::staticDestruct();
 
     return 0;
 }

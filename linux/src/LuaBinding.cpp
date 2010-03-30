@@ -75,6 +75,10 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::cloudCacheForeColor = lb.getValue("cloud_cache_fore_color", Configuration::cloudCacheForeColor);
     Configuration::localDbBackColor = lb.getValue("local_cache_back_color", Configuration::localDbBackColor);
     Configuration::localDbForeColor = lb.getValue("local_cache_fore_color", Configuration::localDbForeColor);
+    Configuration::cloudCacheCandicateColor = lb.getValue("cloud_cache_candicate_color", Configuration::cloudCacheCandicateColor);
+    Configuration::cloudWordsCandicateColor = lb.getValue("cloud_word_candicate_color", Configuration::cloudWordsCandicateColor);
+    Configuration::databaseCandicateColor = lb.getValue("database_candicate_color", Configuration::databaseCandicateColor);
+    Configuration::internalCandicateColor = lb.getValue("internal_candicate_color", Configuration::internalCandicateColor);
 
     // timeouts
     Configuration::selectionTimout = (long long) lb.getValue("sel_timeout", (double) Configuration::selectionTimout / XUtility::MICROSECOND_PER_SECOND) * XUtility::MICROSECOND_PER_SECOND;

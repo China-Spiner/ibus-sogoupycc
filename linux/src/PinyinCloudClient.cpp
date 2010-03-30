@@ -12,7 +12,7 @@
 #include <sys/wait.h>
 #include "defines.h"
 
-using std::deque;
+using std::pair;
 
 /**
  * data passed to thread which will fetch result
@@ -23,6 +23,8 @@ struct RequestThreadData {
 };
 
 bool PinyinCloudClient::preRequestBusy = false;
+multimap<string, string> PinyinCloudClient::cloudMemoryDatabase;
+pthread_rwlock_t PinyinCloudClient::cloudMemoryDatabaseLock;
 
 void* requestThreadFunc(void *data) {
     DEBUG_PRINT(2, "[CLOUD] enter request thread\n");
@@ -100,11 +102,11 @@ void* preRequestThreadFunc(void *data) {
 void PinyinCloudClient::preRequest(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam) {
     // ignore empty string request
     if (requestString.empty()) return;
-    
+
     // preRequestBusy is for generally reduce requests, no need for strict locking
     if (preRequestBusy) return;
     preRequestBusy = true;
-    
+
     DEBUG_PRINT(3, "[CLOUD] new preRequest: %s\n", requestString.c_str());
     PinyinCloudRequest *request = new PinyinCloudRequest;
     request->requestString = requestString;
@@ -262,3 +264,43 @@ PinyinCloudClient::~PinyinCloudClient() {
     pthread_rwlock_destroy(&requestsLock);
 }
 
+void PinyinCloudClient::staticInit() {
+    pthread_rwlock_init(&cloudMemoryDatabaseLock, NULL);
+}
+
+void PinyinCloudClient::staticDestruct() {
+    pthread_rwlock_destroy(&cloudMemoryDatabaseLock);
+}
+
+vector<string> PinyinCloudClient::queryMemoryDatabase(const string& pinyins) {
+    DEBUG_PRINT(3, "[CLOUD] queryMemoryDatabase: '%s'\n", pinyins.c_str());
+    vector<string> r;
+    pthread_rwlock_rdlock(&cloudMemoryDatabaseLock);
+    pair< multimap<string, string>::iterator, multimap<string, string>::iterator> range
+            = cloudMemoryDatabase.equal_range(pinyins);
+    for (multimap<string, string>::iterator it = range.first; it != range.second; ++it) {
+        DEBUG_PRINT(5, "[CLOUD] queryMemoryDatabase: => '%s'\n", it->second.c_str());
+        r.push_back(it->second);
+    }
+    pthread_rwlock_unlock(&cloudMemoryDatabaseLock);
+    return r;
+}
+
+void PinyinCloudClient::addToMemoryDatabase(const string& pinyins, const string& content) {
+    DEBUG_PRINT(3, "[CLOUD] addToMemoryDatabase: '%s' => '%s'\n", pinyins.c_str(), content.c_str());
+    bool duplicated = false;
+    pthread_rwlock_wrlock(&cloudMemoryDatabaseLock);
+    // detect duplicated
+    pair< multimap<string, string>::iterator, multimap<string, string>::iterator> range
+            = cloudMemoryDatabase.equal_range(pinyins);
+    for (multimap<string, string>::iterator it = range.first; it != range.second; ++it)
+        if (it->second == content) {
+            DEBUG_PRINT(4, "[CLOUD] addToMemoryDatabase: duplicated, skipped\n");
+            duplicated = true;
+            break;
+        }
+    if (!duplicated) {
+        cloudMemoryDatabase.insert(pair<string, string > (pinyins, content));
+    }
+    pthread_rwlock_unlock(&cloudMemoryDatabaseLock);
+}

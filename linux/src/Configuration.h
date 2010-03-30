@@ -105,6 +105,10 @@ namespace Configuration {
     extern int correctingForeColor, correctingBackColor;
     extern int cloudCacheForeColor, cloudCacheBackColor;
     extern int localDbForeColor, localDbBackColor;
+    extern int cloudCacheCandicateColor;
+    extern int cloudWordsCandicateColor;
+    extern int databaseCandicateColor;
+    extern int internalCandicateColor;
 
     // keys
     extern ImeKey startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey, quickResponseKey;
