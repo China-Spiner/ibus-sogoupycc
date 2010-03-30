@@ -689,13 +689,13 @@ int LuaBinding::getValue(const char* varName, const int defaultValue, const char
 
 size_t LuaBinding::getValue(const char* varName, const size_t defaultValue, const char* libName) {
     DEBUG_PRINT(5, "[LUABIND] getValue(size_t): %s.%s\n", libName, varName);
-    return getValue(varName, (int) defaultValue, libName);
+    return (size_t)getValue(varName, (int) defaultValue, libName);
 }
 
 double LuaBinding::getValue(const char* varName, const double defaultValue, const char* libName) {
     DEBUG_PRINT(4, "[LUABIND] getValue(double): %s.%s\n", libName, varName);
     pthread_mutex_lock(&luaStateMutex);
-    int r = defaultValue;
+    double r = defaultValue;
     int pushedCount = reachValue(varName, libName);
     if (lua_isnumber(L, -1)) r = lua_tonumber(L, -1);
     lua_pop(L, pushedCount);

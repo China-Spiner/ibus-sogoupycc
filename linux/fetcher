@@ -13,6 +13,8 @@ if debug then arg[2] = nil end
 local py, timeout, retry, key = arg[1] or 't', tonumber(arg[2])
 py = py:gsub("[^a-z]", '')
 
+if timeout == 0 then timeout = 0.7 end
+
 function refresh_key()
 	local ret = http.request('http://web.pinyin.sogou.com/web_ime/patch.php') or ''
 	key = ret:match('"(.-)"') or ''
