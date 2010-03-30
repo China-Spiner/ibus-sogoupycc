@@ -89,8 +89,9 @@ int LuaBinding::l_applySettings(lua_State* L) {
     Configuration::pageUpKey.readFromLua(lb, "page_up_key");
     Configuration::quickResponseKey.readFromLua(lb, "quick_response_key");
 
-    // tolerances
+    // int, tolerances
     Configuration::fallbackEngTolerance = lb.getValue("auto_eng_tolerance", Configuration::fallbackEngTolerance);
+    Configuration::preRequestRetry  = lb.getValue("pre_request_retry", Configuration::preRequestRetry);
 
     // bools
     Configuration::staticNotification = lb.getValue("static_notification", Configuration::staticNotification);

@@ -93,6 +93,7 @@ namespace Configuration {
 
     // buffer size receive return string from fetcher script
     extern int fetcherBufferSize;
+    extern int preRequestRetry;
 
     // keys used in select item in lookup table
     extern vector<ImeKey> tableLabelKeys;

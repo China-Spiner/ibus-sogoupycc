@@ -59,6 +59,7 @@ struct _IBusSgpyccEngine {
     guint32 lastKeyval;
     pthread_mutex_t engineMutex;
     bool lastInputIsChinese;
+    int preRequestRetry;
 
     // lua binding
     // now it is indeed global
@@ -228,13 +229,14 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->commitedConvertingPinyins = new string();
     engine->lastActivePreedit = new string();
     engine->lastPreRequestString = new string();
-    
+
     engine->correctings = new PinyinSequence();
 
     // internal vars
     engine->lastProcessKeyResult = FALSE;
     engine->lastKeyval = 0;
     engine->lastInputIsChinese = false;
+    engine->preRequestRetry = Configuration::preRequestRetry;
 
 
     // lookup table
@@ -300,7 +302,7 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     delete engine->correctings;
     delete engine->lastActivePreedit;
     delete engine->lastPreRequestString;
-    
+
     // delete other things
     // delete engine->punctuationMap; // now global
 
@@ -1199,8 +1201,13 @@ static void preRequestCallback(IBusSgpyccEngine* engine) {
         if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
         else preRequestString = ps.toString(0, ps.size() - 1);
 
-        if (Configuration::getGlobalCache(preRequestString, false).empty()) {
-            // add retry timeout for same contest
+        if (engine->lastPreRequestString == preRequestString) {
+            if (engine->preRequestRetry > 0) engine->preRequestRetry--;
+        } else {
+            engine->preRequestRetry = Configuration::preRequestRetry;
+        }
+        
+        if (engine->preRequestRetry > 0 && Configuration::getGlobalCache(preRequestString, false).empty()) {
             PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
         }
     }

@@ -56,6 +56,7 @@ namespace Configuration {
 
     // int
     int fallbackEngTolerance = 3;
+    int preRequestRetry = 4;
 
     // pre request timeout
     double preRequestTimeout = 0.7;
