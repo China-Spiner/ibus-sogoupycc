@@ -64,7 +64,7 @@ namespace Configuration {
     int preRequestRetry = 4;
 
     // pre request timeout
-    double preRequestTimeout = 0.7;
+    double preRequestTimeout = 1.2;
     double requestTimeout = 12.;
 
     // selection timeout tolerance
@@ -75,11 +75,11 @@ namespace Configuration {
     string autoWidthPunctuations = ".,:";
 
     // multi tone chineses
-    size_t multiToneLimit = 2;
+    size_t multiToneLimit = 4;
 
     // database confs
     int dbResultLimit = 128, dbLengthLimit = 10;
-    string dbOrder = "cd2";
+    string dbOrder = "cwd2";
     double dbLongPhraseAdjust = 1.2;
     double dbCompleteLongPhraseAdjust = 4;
 

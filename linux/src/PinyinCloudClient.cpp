@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <sys/wait.h>
 #include "defines.h"
+#include "PinyinUtility.h"
 
 using std::pair;
 
@@ -46,7 +47,6 @@ void* requestThreadFunc(void *data) {
     DEBUG_PRINT(4, "[CLOUD.REQTHREAD] writing response: %s\n", responseString.c_str());
     // find that request according to request id (any better ways?)
     for (deque<PinyinCloudRequest>::reverse_iterator it = client->requests.rbegin(); it != client->requests.rend(); ++it) {
-
         if (it->requestId == request->requestId) {
             // set it to 'responsed'
 
@@ -288,18 +288,24 @@ vector<string> PinyinCloudClient::queryMemoryDatabase(const string& pinyins) {
 
 void PinyinCloudClient::addToMemoryDatabase(const string& pinyins, const string& content) {
     DEBUG_PRINT(3, "[CLOUD] addToMemoryDatabase: '%s' => '%s'\n", pinyins.c_str(), content.c_str());
-    bool duplicated = false;
+    bool rejected = false;
     pthread_rwlock_wrlock(&cloudMemoryDatabaseLock);
     // detect duplicated
     pair< multimap<string, string>::iterator, multimap<string, string>::iterator> range
             = cloudMemoryDatabase.equal_range(pinyins);
-    for (multimap<string, string>::iterator it = range.first; it != range.second; ++it)
-        if (it->second == content) {
-            DEBUG_PRINT(4, "[CLOUD] addToMemoryDatabase: duplicated, skipped\n");
-            duplicated = true;
-            break;
-        }
-    if (!duplicated) {
+    if (!PinyinUtility::isCharactersPinyinsMatch(content, pinyins)) {
+        rejected = true;
+        DEBUG_PRINT(4, "[CLOUD] addToMemoryDatabase: invalid, skipped\n");
+    } else {
+        for (multimap<string, string>::iterator it = range.first; it != range.second; ++it)
+            if (it->second == content) {
+                DEBUG_PRINT(4, "[CLOUD] addToMemoryDatabase: duplicated, skipped\n");
+                rejected = true;
+                break;
+            }
+    }
+    if (!rejected) {
+        // check against gb2312 <-> pinyin
         cloudMemoryDatabase.insert(pair<string, string > (pinyins, content));
     }
     pthread_rwlock_unlock(&cloudMemoryDatabaseLock);

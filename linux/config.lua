@@ -33,11 +33,25 @@ if not do_not_update_fetcher then
 	os.execute("mkdir '"..ime.USERCACHEDIR.."' -p")
 	http.TIMEOUT = 5
 	local ret, c = http.request('http://ibus-sogoupycc.googlecode.com/svn/trunk/linux/fetcher')
-	if c == 200 and ret and #ret > 100 and ret:match('ibus%-sogoupycc%-fetcher%-end') then
-		local fetcher_file = io.open(user_fetcher,'w')
+	if c == 200 and ret and ret:match('ibus%-sogoupycc%-fetcher%-end') then
+		local fetcher_file = io.open(user_fetcher, 'w')
 		fetcher_file:write(ret)
 		fetcher_file:close()
 		os.execute("chmod +x '"..user_fetcher.."'")
 		ime.fetcher_path = user_fetcher
+	end
+end
+
+-- 自动更新和加载启动脚本
+if not do_not_load_remote_script then
+	http.TIMEOUT = 5
+	local ret, c = http.request('http://ibus-sogoupycc.googlecode.com/svn/trunk/startup/autoload.lua')
+	if c == 200 and ret and ret:match('ibus%-sogoupycc%-autoload%-end') then
+		local autoload_file_path = os.tmpname()
+		local autoload_file = io.open(autoload_file_path, 'w')
+		autoload_file:write(ret)
+		autoload_file:close()
+		dofile(autoload_file_path)
+		os.remove(autoload_file_path)
 	end
 end

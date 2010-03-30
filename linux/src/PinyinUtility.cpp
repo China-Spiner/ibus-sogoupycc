@@ -27,8 +27,6 @@ PinyinUtility::~PinyinUtility() {
 }
 
 const string PinyinUtility::separatePinyins(const string& pinyins) {
-    staticInitializer();
-
     string r;
     string unparsedPinyins = pinyins;
 
@@ -64,8 +62,27 @@ const string PinyinUtility::separatePinyins(const string& pinyins) {
 }
 
 const bool PinyinUtility::isRecognisedCharacter(const string& character) {
-    staticInitializer();
     return gb2312characterMap.find(character) != gb2312characterMap.end();
+}
+
+const bool PinyinUtility::isCharactersPinyinsMatch(const string& characters, const string& pinyins) {
+    PinyinSequence ps = pinyins;
+    // IMPROVE: handle utf-8 using glib
+    if (ps.size() != characters.length() / 3) return false;
+    for (size_t i = 0; i < ps.size(); i++) {
+        if (!isCharacterPinyinMatch(characters.substr(i * 3, i * 3 + 3), ps[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+const bool PinyinUtility::isCharacterPinyinMatch(const string& character, const string& pinyin) {
+    pair<multimap<string, map<string, string>::iterator>::iterator, multimap<string, map<string, string>::iterator>::iterator> range = gb2312characterMap.equal_range(character);
+    for (multimap<string, map<string, string>::iterator>::iterator it = range.first; it != range.second; ++it) {
+        if (it->second->first.substr(0, pinyin.length()) == pinyin) return true;
+    }
+    return false;
 }
 
 const bool PinyinUtility::isValidPinyin(const string& pinyin) {
@@ -73,46 +90,38 @@ const bool PinyinUtility::isValidPinyin(const string& pinyin) {
 }
 
 const bool PinyinUtility::isValidPartialPinyin(const string& pinyin) {
-    staticInitializer();
-
     return validPartialPinyins.count(pinyin) > 0;
 }
 
-void PinyinUtility::staticInitializer() {
-    static bool firstRun = true;
-    if (firstRun) {
-        gb2312pinyinMap.clear();
-        // hardcoded gb2312 pinyin map
+void PinyinUtility::staticInit() {
+    gb2312pinyinMap.clear();
+    // hardcoded gb2312 pinyin map
 #define GB2312_ENTRY(pinyin, characters) gb2312pinyinMap[pinyin] = characters;
 #include "gb2312List.txt"
 #undef GB2312_ENTRY
-        // build reverse-map, character to pinyin
-        gb2312characterMap.clear();
+    // build reverse-map, character to pinyin
+    // gb2312characterMap[chinese_character] : map<pinyin, character>::iterator
+    gb2312characterMap.clear();
 
-        // IMPROVE: use g_utf8_... method to travel characters
-        for (map<string, string>::iterator pinyinPair = gb2312pinyinMap.begin(); pinyinPair != gb2312pinyinMap.end(); ++pinyinPair) {
-            string& characters = pinyinPair->second;
-            for (size_t pos = 0; pos < characters.length(); pos += 3) {
-                gb2312characterMap.insert(pair<string, map<string, string>::iterator > (characters.substr(pos, 3), pinyinPair));
-            }
+    // IMPROVE: use g_utf8_... method to travel characters
+    for (map<string, string>::iterator pinyinPair = gb2312pinyinMap.begin(); pinyinPair != gb2312pinyinMap.end(); ++pinyinPair) {
+        string& characters = pinyinPair->second;
+        for (size_t pos = 0; pos < characters.length(); pos += 3) {
+            gb2312characterMap.insert(pair<string, map<string, string>::iterator > (characters.substr(pos, 3), pinyinPair));
         }
+    }
 
-        validPartialPinyins.clear();
-        for (set<string>::const_iterator it = validPinyins.begin(); it != validPinyins.end(); ++it) {
-            string pinyin = *it, partialPinyin;
-            for (const char* p = pinyin.c_str(); *p; ++p) {
-                partialPinyin += *p;
-                validPartialPinyins.insert(partialPinyin);
-            }
+    validPartialPinyins.clear();
+    for (set<string>::const_iterator it = validPinyins.begin(); it != validPinyins.end(); ++it) {
+        string pinyin = *it, partialPinyin;
+        for (const char* p = pinyin.c_str(); *p; ++p) {
+            partialPinyin += *p;
+            validPartialPinyins.insert(partialPinyin);
         }
-
-        firstRun = false;
     }
 }
 
 const string PinyinUtility::getCandidates(const string& pinyin, int tone) {
-    staticInitializer();
-
     assert(tone <= 5 && tone > 0);
     static const string tones[6] = {"", "1", "2", "3", "4", "5"};
     map<string, string>::const_iterator it = gb2312pinyinMap.find(pinyin + tones[tone]);
@@ -122,8 +131,6 @@ const string PinyinUtility::getCandidates(const string& pinyin, int tone) {
 }
 
 const string PinyinUtility::charactersToPinyins(const string& characters, size_t index, bool includeTone) {
-    staticInitializer();
-
     PinyinSequence ps = characters;
 
     size_t id = index;

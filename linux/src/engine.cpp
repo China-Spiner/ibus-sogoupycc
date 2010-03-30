@@ -674,6 +674,8 @@ engineProcessKeyEventStart:
                         // edit active preedit
                         *engine->preedit = "";
                         *engine->correctings = *engine->activePreedit;
+                        *engine->lastPreRequestString = *engine->activePreedit;
+                        PinyinCloudClient::preRequest(*engine->lastPreRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
                         *engine->activePreedit = "";
                         // clear candidates, prepare for new candidates
                         engineClearLookupTable(engine);
@@ -1235,24 +1237,34 @@ static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSri
 static void preRequestCallback(IBusSgpyccEngine* engine) {
     engineUpdatePreedit(engine);
     // send next pre-request
-    if (Configuration::preRequest && !engine->activePreedit->empty()) {
-        // send prerequest if user need
-        // handle case: wo ', if last pinyin is partial, do not perform prerequest
-        string preRequestString;
-        PinyinSequence ps = *engine->activePreedit;
+    if (engine->correctings->size() == 0) {
+        // not correction mode
+        if (Configuration::preRequest && !engine->activePreedit->empty()) {
+            // send prerequest if user need
+            // handle case: wo ', if last pinyin is partial, do not perform prerequest
+            string preRequestString;
+            PinyinSequence ps = *engine->activePreedit;
 
-        if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
-        else preRequestString = ps.toString(0, ps.size() - 1);
+            if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
+            else preRequestString = ps.toString(0, ps.size() - 1);
 
-        if (*engine->lastPreRequestString == preRequestString) {
-            if (engine->preRequestRetry > 0) engine->preRequestRetry--;
-        } else {
-            engine->preRequestRetry = Configuration::preRequestRetry;
-            *engine->lastPreRequestString = preRequestString;
+            if (*engine->lastPreRequestString == preRequestString) {
+                if (engine->preRequestRetry > 0) engine->preRequestRetry--;
+            } else {
+                engine->preRequestRetry = Configuration::preRequestRetry;
+                *engine->lastPreRequestString = preRequestString;
+            }
+
+            if (engine->preRequestRetry > 0 && Configuration::getGlobalCache(preRequestString, false).empty()) {
+                PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
+            }
         }
-
-        if (engine->preRequestRetry > 0 && Configuration::getGlobalCache(preRequestString, false).empty()) {
-            PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
+    } else {
+        // correction mode
+        PinyinSequence ps = *engine->lastPreRequestString;
+        if (ps.size() > 1) {
+            *engine->lastPreRequestString = ps.toString(1);
+            PinyinCloudClient::preRequest(*engine->lastPreRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
         }
     }
 }
@@ -1571,6 +1583,6 @@ int Engine::l_sendRequest(lua_State * L) {
     ibus_object_unref(emptyText);
     // engine->lastInputIsChinese = true;
     // engineUpdatePreedit(engine);
-    
+
     return 0; // return 0 value to lua code
 }

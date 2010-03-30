@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
     PinyinCloudClient::staticInit();
     LuaBinding::staticInit();
     Configuration::staticInit();
-    
+    PinyinUtility::staticInit();
 
     // simple argc parser
     ibusRegister(argc > 1 && strstr(argv[1], "-i"));

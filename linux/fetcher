@@ -42,8 +42,7 @@ function try_convert(tail, tail_len)
 			local content = url.unescape(res)
 			local first_word = content:match('(.-)：')
 			if first_word and #first_word > 2 then
-				-- test usage: math.randomseed(os.time()) socket.sleep(math.random(20)) 
-				io.write(first_word:sub(1, #content - 3 * tail_len), '\n')
+				io.write(first_word:sub(1, #first_word - 3 * tail_len), '\n')
 				for word in content:gmatch('+(.-)：') do
 					io.write(word, '\n')
 				end

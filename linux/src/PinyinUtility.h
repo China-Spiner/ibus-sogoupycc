@@ -27,6 +27,8 @@ public:
     virtual ~PinyinUtility();
 
     static const bool isRecognisedCharacter(const string& character);
+    static const bool isCharactersPinyinsMatch(const string& character, const string& pinyin);
+    static const bool isCharacterPinyinMatch(const string& character, const string& pinyin);
     static const bool isValidPinyin(const string& pinyin);
     static const bool isValidPartialPinyin(const string& pinyin);
 
@@ -43,6 +45,7 @@ public:
     static const string separatePinyins(const string& pinyins);
     static const int VALID_PINYIN_MAX_LENGTH;
 
+    static void staticInit();
 private:
     PinyinUtility(const PinyinUtility& orig);
 
@@ -70,7 +73,6 @@ private:
 
     static const set<string> validPinyins;
     static set<string> validPartialPinyins;
-    static void staticInitializer();
 };
 
 #endif	/* _PINYINUTILITY_H */
