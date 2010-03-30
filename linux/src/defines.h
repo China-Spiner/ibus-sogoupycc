@@ -22,7 +22,7 @@
 #define APP_ICON (PKGDATADIR "/icons/ibus-sogoupycc.png")
 
 #ifndef VERSION
-#define VERSION "0.2.2"
+#define VERSION "0.2.3"
 #endif
 
 #include "XUtility.h"

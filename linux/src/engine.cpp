@@ -49,7 +49,7 @@ struct _IBusSgpyccEngine {
     // convertingPinyins are pinyin string in preedit and should be choiced from left to right manually
     PinyinSequence* correctings;
     //string* correctingPinyins;
-    string* commitedConvertingPinyins, *commitedConvertingCharacters, *lastActivePreedit;
+    string* commitedConvertingPinyins, *commitedConvertingCharacters, *lastActivePreedit, *lastPreRequestString;
 
     // eng mode, requesting (used to update requestingProp)
     bool engMode, requesting;
@@ -126,6 +126,7 @@ static string directFetcher(void* data, const string& requestString);
 static string externalFetcher(void* data, const string& requestString);
 static string luaFetcher(void* voidData, const string & requestString);
 static string preFetcher(void* voidData, const string& requestString);
+static void preRequestCallback(IBusSgpyccEngine* engine);
 
 // request cache
 static const string getRequestCache(IBusSgpyccEngine* engine, const string& requestString, const bool includeWeak = false);
@@ -226,13 +227,15 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->commitedConvertingCharacters = new string();
     engine->commitedConvertingPinyins = new string();
     engine->lastActivePreedit = new string();
-
+    engine->lastPreRequestString = new string();
+    
     engine->correctings = new PinyinSequence();
 
     // internal vars
     engine->lastProcessKeyResult = FALSE;
     engine->lastKeyval = 0;
     engine->lastInputIsChinese = false;
+
 
     // lookup table
     engine->lookupTableLabelCount = Configuration::tableLabelKeys.size();
@@ -296,7 +299,8 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
     delete engine->commitedConvertingPinyins;
     delete engine->correctings;
     delete engine->lastActivePreedit;
-
+    delete engine->lastPreRequestString;
+    
     // delete other things
     // delete engine->punctuationMap; // now global
 
@@ -805,9 +809,9 @@ engineProcessKeyEventStart:
                         if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
                         else preRequestString = ps.toString(0, ps.size() - 1);
 
-                        PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                        PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
                     }
-                    // now inputing chinses
+                    // now inputing chineses
                     *engine->lastActivePreedit = *engine->activePreedit;
                 }
             } // check eng mode
@@ -1028,7 +1032,7 @@ static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string&
     string remainingPinyins, partialConvertedCharacters;
     partialConvertedCharacters = getPartialCacheConvert(engine, pinyins, &remainingPinyins);
     return LuaBinding::pinyinDatabases.begin()->second->
-            greedyConvert(pinyins, Configuration::dbCompleteLongPhraseAdjust, Configuration::dbLengthLimit);
+            greedyConvert(pinyins, Configuration::dbCompleteLongPhraseAdjust);
 }
 
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
@@ -1183,6 +1187,25 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
 
 // callback by PinyinCloudClient
 
+static void preRequestCallback(IBusSgpyccEngine* engine) {
+    engineUpdatePreedit(engine);
+    // send next pre-request
+    if (Configuration::preRequest && !engine->activePreedit->empty()) {
+        // send prerequest if user need
+        // handle case: wo ', if last pinyin is partial, do not perform prerequest
+        string preRequestString;
+        PinyinSequence ps = *engine->activePreedit;
+
+        if (PinyinUtility::isValidPinyin(ps[ps.size() - 1])) preRequestString = ps.toString();
+        else preRequestString = ps.toString(0, ps.size() - 1);
+
+        if (Configuration::getGlobalCache(preRequestString, false).empty()) {
+            // add retry timeout for same contest
+            PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
+        }
+    }
+}
+
 string externalFetcher(void* data, const string & requestString) {
     IBusSgpyccEngine* engine = (typeof (engine)) data;
     DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
@@ -1290,13 +1313,17 @@ static string preFetcher(void* data, const string& requestString) {
         }
 
         if ((res = response).empty()) {
-            if (Configuration::preRequestFallback) {
-                // weak cache greedy result
-                res = getGreedyLocalCovert(engine, requestString);
-                if (Configuration::writeRequestCache && requestString != res) writeRequestCache(engine, requestString, res, true);
-            } else {
-                // empty, means fails
-                res = requestString;
+            res = getRequestCache(engine, requestString, true);
+            if (res.empty()) {
+                if (Configuration::preRequestFallback) {
+                    // weak cache greedy result
+                    res = getGreedyLocalCovert(engine, requestString);
+                    // write weak
+                    if (Configuration::writeRequestCache && requestString != res) writeRequestCache(engine, requestString, res, true);
+                } else {
+                    // empty, means fails
+                    res = requestString;
+                }
             }
         } else {
             // update statistics

@@ -83,6 +83,8 @@ void* preRequestThreadFunc(void *data) {
 
     // this may takes time
     string responseString = request->fetchFunc(request->fetchParam, request->requestString);
+    PinyinCloudClient::preRequestBusy = false;
+
     UNUSED(responseString);
 
     if (request->callbackFunc) {
@@ -92,13 +94,14 @@ void* preRequestThreadFunc(void *data) {
 
     delete request;
     DEBUG_PRINT(3, "[CLOUD.PREREQ] Exiting...\n");
-    PinyinCloudClient::preRequestBusy = false;
     pthread_exit(0);
 }
 
 void PinyinCloudClient::preRequest(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam) {
     // ignore empty string request
     if (requestString.empty()) return;
+    
+    // preRequestBusy is for generally reduce requests, no need for strict locking
     if (preRequestBusy) return;
     preRequestBusy = true;
     
