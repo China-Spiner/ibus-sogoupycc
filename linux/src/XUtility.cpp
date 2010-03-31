@@ -53,16 +53,14 @@ namespace XUtility {
     void* updateSelection() {
         DEBUG_PRINT(5, "[XUTIL] selection update callback\n");
 
-        if (gtk_clipboard_wait_is_text_available(primaryClipboard)) {
-            gchar *text = gtk_clipboard_wait_for_text(primaryClipboard);
-            if (text) {
-                pthread_rwlock_wrlock(&selectionRwLock);
-                currentSelection = string((char*) text);
-                updatedTime = getCurrentTime();
-                DEBUG_PRINT(4, "[XUTIL] selection update to: '%s'\n", currentSelection.c_str());
-                g_free(text);
-                pthread_rwlock_unlock(&selectionRwLock);
-            }
+        gchar *text = gtk_clipboard_wait_for_text(primaryClipboard);
+        if (text) {
+            pthread_rwlock_wrlock(&selectionRwLock);
+            currentSelection = string((char*) text);
+            updatedTime = getCurrentTime();
+            DEBUG_PRINT(4, "[XUTIL] selection update to: '%s'\n", currentSelection.c_str());
+            g_free(text);
+            pthread_rwlock_unlock(&selectionRwLock);
         }
         return NULL;
     }
@@ -91,7 +89,7 @@ namespace XUtility {
         if (notifyInited) {
             staticNotify = notify_notification_new("-", NULL, NULL, NULL);
         }
-        
+
         staticInited = true;
     }
 

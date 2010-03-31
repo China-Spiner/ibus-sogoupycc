@@ -681,6 +681,7 @@ engineProcessKeyEventStart:
                         engineClearLookupTable(engine);
                         keyval = 0;
                         handled = true;
+                        engineUpdateProperties(engine);
                         goto engineProcessKeyEventStart;
                     } else if (requestCount == 0) {
                         // no preedit, no pending requests, we are clear.
@@ -816,6 +817,7 @@ engineProcessKeyEventStart:
                         *engine->lastPreRequestString = preRequestString;
                         engine->preRequestRetry = Configuration::preRequestRetry;
                         PinyinCloudClient::preRequest(preRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
+                        engineUpdateProperties(engine);
                     }
                     // now inputing chineses
                     *engine->lastActivePreedit = *engine->activePreedit;
@@ -884,10 +886,9 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
     } else {
         ibus_property_set_icon(engine->engModeProp, PKGDATADIR "/icons/engmode-off.png");
     }
-    if (engine->requesting) {
+    if (engine->requesting || PinyinCloudClient::preRequestBusy) {
         ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/requesting.png");
     } else {
-
         ibus_property_set_icon(engine->requestingProp, PKGDATADIR "/icons/idle.png");
     }
 
@@ -1267,6 +1268,7 @@ static void preRequestCallback(IBusSgpyccEngine* engine) {
             PinyinCloudClient::preRequest(*engine->lastPreRequestString, preFetcher, (void*) engine, (ResponseCallbackFunc) preRequestCallback, (void*) engine);
         }
     }
+    engineUpdateProperties(engine);
 }
 
 // alternative popen impl. by me with timeout control

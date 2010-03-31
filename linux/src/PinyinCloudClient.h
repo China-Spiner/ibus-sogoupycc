@@ -72,6 +72,8 @@ public:
 
     static vector<string> queryMemoryDatabase(const string& pinyins);
     static void addToMemoryDatabase(const string& pinyins, const string& content);
+    static bool preRequestBusy;
+    
 private:
     /**
      *  this is private and should not be used.
@@ -85,7 +87,6 @@ private:
     unsigned int nextRequestId;
 
     static pthread_rwlock_t cloudMemoryDatabaseLock;
-    static bool preRequestBusy;
     static multimap<string, string> cloudMemoryDatabase;
 };
 

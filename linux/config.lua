@@ -28,7 +28,7 @@ if not do_not_load_database then
 	dbs:close()
 end
 
--- 自动更新用户 fetcher 脚本
+-- 更新用户 fetcher 脚本
 if not do_not_update_fetcher then
 	os.execute("mkdir '"..ime.USERCACHEDIR.."' -p")
 	http.TIMEOUT = 5
@@ -42,7 +42,7 @@ if not do_not_update_fetcher then
 	end
 end
 
--- 自动更新和加载启动脚本
+-- 更新和加载远程脚本
 if not do_not_load_remote_script then
 	http.TIMEOUT = 5
 	os.execute("mkdir '"..ime.USERCACHEDIR.."' -p")
