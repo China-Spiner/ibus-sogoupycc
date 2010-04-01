@@ -24,12 +24,23 @@ function view_note()
 	os.execute("[ -e '"..note_path.."' ] && xdg-open '"..note_path.."' &")
 end
 
+local alternative_fetcher_path = 'echo "" #private'
+function toggle_private_mode()
+	ime.fetcher_path, alternative_fetcher_path = alternative_fetcher_path, ime.fetcher_path
+	if ime.fetcher_path:match('#private') then
+		ime.notify('进入离线模式', '现在开始的拼音输入不会经由云服务器')
+	else
+		ime.notify('回到正常模式', '现在开始的拼音输入会正常经由云服务器')
+	end
+	ime.apply_settings()
+end
+
 ime.register_command(0, 0 , "查看输入法版本", "ime.notify('输入法版本', '正在使用的版本：'..ime.VERSION..'\\n最新已经发布的版本："..current_version.."', 'info')")
 ime.register_command(0, 0, "全双拼切换", "ime.use_double_pinyin = not ime.use_double_pinyin ime.apply_settings() ime.notify('全双拼切换', '已经切换到'..(ime.use_double_pinyin and '双拼' or '全拼'))")
+ime.register_command(('P'):byte(), key.MOD1_MASK + key.SHIFT_MASK , "离线模式 (Shift + Alt + P)", "toggle_private_mode()")
 ime.register_command(('t'):byte(), key.CONTROL_MASK + key.MOD1_MASK , "就地转换成繁体 (Ctrl + Alt + T)", "ime.commit(google_translate(ime.get_selection(), 'zh-CN|zh-TW'))")
 ime.register_command(('e'):byte(), key.CONTROL_MASK + key.MOD1_MASK , "就地翻译成英文 (Ctrl + Alt + E)", "ime.commit(google_translate(ime.get_selection(), 'zh-CN|en'))")
 ime.register_command(('J'):byte(), key.MOD1_MASK + key.SHIFT_MASK , "添加到备忘录 (Shift + Alt + J)", "add_to_note(ime.get_selection())")
 ime.register_command(('K'):byte(), key.MOD1_MASK + key.SHIFT_MASK , "查看备忘录 (Shift + Alt + K)", "view_note()")
 
 -- ibus-sogoupycc-autoload-end --
-
