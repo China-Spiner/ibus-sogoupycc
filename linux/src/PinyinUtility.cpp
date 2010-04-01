@@ -68,9 +68,9 @@ const bool PinyinUtility::isRecognisedCharacter(const string& character) {
 const bool PinyinUtility::isCharactersPinyinsMatch(const string& characters, const string& pinyins) {
     PinyinSequence ps = pinyins;
     // IMPROVE: handle utf-8 using glib
-    if (ps.size() != characters.length() / 3) return false;
+    if (ps.size() != g_utf8_strlen(characters.c_str(), -1)) return false;
     for (size_t i = 0; i < ps.size(); i++) {
-        if (!isCharacterPinyinMatch(characters.substr(i * 3, i * 3 + 3), ps[i])) {
+        if (!isCharacterPinyinMatch(characters.substr(i * 3, 3), ps[i])) {
             return false;
         }
     }
@@ -80,8 +80,12 @@ const bool PinyinUtility::isCharactersPinyinsMatch(const string& characters, con
 const bool PinyinUtility::isCharacterPinyinMatch(const string& character, const string& pinyin) {
     pair<multimap<string, map<string, string>::iterator>::iterator, multimap<string, map<string, string>::iterator>::iterator> range = gb2312characterMap.equal_range(character);
     for (multimap<string, map<string, string>::iterator>::iterator it = range.first; it != range.second; ++it) {
-        if (it->second->first.substr(0, pinyin.length()) == pinyin) return true;
+        if (it->second->first.substr(0, pinyin.length()) == pinyin) {
+            DEBUG_PRINT(8, "[UTIL] isMatch: '%s' => '%s': true(%s)\n", pinyin.c_str(), character.c_str(), it->second->first.c_str());
+            return true;
+        }
     }
+    DEBUG_PRINT(8, "[UTIL] isMatch: '%s' => '%s': false\n", pinyin.c_str(), character.c_str());
     return false;
 }
 
