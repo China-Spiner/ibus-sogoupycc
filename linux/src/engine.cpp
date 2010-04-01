@@ -11,10 +11,10 @@
 #include <cassert>
 #include <vector>
 #include <dirent.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
 
 #include "defines.h"
 #include "engine.h"
@@ -900,6 +900,7 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
 
 static void engineFocusIn(IBusSgpyccEngine* engine) {
     DEBUG_PRINT(2, "[ENGINE] FocusIn\n");
+    engine->hasFocus = true;
     Configuration::activeEngine = (typeof (Configuration::activeEngine))engine;
     engineUpdateProperties(engine);
     engineUpdatePreedit(engine);
@@ -907,14 +908,15 @@ static void engineFocusIn(IBusSgpyccEngine* engine) {
 
 static void engineFocusOut(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] FocusOut\n");
+    engine->hasFocus = false;
     Configuration::activeEngine = NULL;
 }
 
 static void engineReset(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(1, "[ENGINE] Reset\n");
-    engine->cloudClient->removeFirstRequest(INT_MAX);
-    engineUpdateProperties(engine);
-    engineUpdatePreedit(engine);
+    // engine->cloudClient->removeFirstRequest(INT_MAX);
+    // engineUpdateProperties(engine);
+    // engineUpdatePreedit(engine);
 }
 
 static void engineEnable(IBusSgpyccEngine * engine) {
@@ -1322,6 +1324,7 @@ void killProcessTree(pid_t pid, int sig = SIGTERM) {
     struct dirent *dirEntry;
 
     if ((dir = opendir("/proc")) == NULL) {
+        kill(pid, sig);
         perror("can't access /proc");
         return; // not a fatal error
     }
@@ -1354,7 +1357,6 @@ void killProcessTree(pid_t pid, int sig = SIGTERM) {
 // @return output in limited time
 
 const string getExecuteOutputWithTimeout(const string command, const long long timeoutUsec = -1) {
-    DEBUG_PRINT(2, "[ENGINE] getExecuteOutputWithTimeout(%s, %lld)\n", command.c_str(), timeoutUsec);
     string output = "";
 
     if (timeoutUsec > 0) {
@@ -1362,34 +1364,46 @@ const string getExecuteOutputWithTimeout(const string command, const long long t
         pid_t pidCommand;
 
         if ((pidCommand = popen2(command.c_str(), &infd, &outfd)) <= 0) return output;
-        // write(infd, "", 0); // reserved, if input is required one day
         close(infd);
 
-        pid_t pidTimer;
-        pidTimer = fork();
-        if (pidTimer == 0) {
-            sleep(timeoutUsec / 1000000);
-            usleep(timeoutUsec % 1000000);
-            killProcessTree(pidCommand, SIGTERM);
-            // NOTE: must kill entire process tree, otherwise sub processes
-            // will hold outfp and readBytes = read() will be blocking!
-            return 0;
-        }
+        fd_set selectedFds;
+        FD_ZERO(&selectedFds);
+        FD_SET(outfd, &selectedFds);
 
-        // get response
-        char receiveBuffer[4096];
-        int readBytes;
-        receiveBuffer[0] = 0;
+        struct timeval timeLeft;
+        timeLeft.tv_sec = timeoutUsec / 1000000;
+        timeLeft.tv_usec = timeoutUsec % 1000000;
 
-        while ((readBytes = read(outfd, receiveBuffer, sizeof (receiveBuffer) - 1)) > 0) {
-            receiveBuffer[readBytes] = 0;
-            output += receiveBuffer;
+        long long timeDeadline = XUtility::getCurrentTime() + timeoutUsec;
+
+        fcntl(outfd, F_SETFL, O_NONBLOCK);
+
+        while (select(outfd + 1, &selectedFds, NULL, NULL, &timeLeft) > 0) {
+            // get response
+            char receiveBuffer[Configuration::fetcherBufferSize];
+            receiveBuffer[0] = 0;
+            int readBytes = read(outfd, receiveBuffer, sizeof (receiveBuffer) - 1);
+            if (readBytes > 0) {
+                receiveBuffer[readBytes] = 0;
+                output += receiveBuffer;
+            } else {
+                // sleep a while, say, 0.01sec
+                // this is possibly never reached, because
+                // non-blocking IO setted, select() does the trick.
+                usleep(10000);
+            }
+            // update timeLeft, check timeout
+            long long timeNow = XUtility::getCurrentTime();
+            if (timeNow >= timeDeadline) break;
+            timeLeft.tv_sec = (timeDeadline - timeNow) / 1000000;
+            timeLeft.tv_usec = (timeDeadline - timeNow) % 1000000;
         }
-        kill(pidTimer, SIGKILL);
+        // timeout or empty response or done
+        close(outfd);
+        killProcessTree(pidCommand, SIGKILL);
 
         // clean zombies, they should be already killed.
         waitpid(pidCommand, NULL, 0);
-        waitpid(pidTimer, NULL, 0);
     } else {
         // use traditional popen
         FILE* fresponse = popen(command.c_str(), "r");
@@ -1404,7 +1418,6 @@ const string getExecuteOutputWithTimeout(const string command, const long long t
     }
     return output;
 }
-
 
 // kinds of fetchers callback by PinyinCloudClient
 

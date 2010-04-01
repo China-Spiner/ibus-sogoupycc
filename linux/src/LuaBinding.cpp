@@ -503,7 +503,6 @@ void LuaBinding::staticDestruct() {
 }
 
 const lua_State* LuaBinding::getLuaState() const {
-
     return L;
 }
 
