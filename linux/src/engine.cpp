@@ -64,7 +64,7 @@ struct _IBusSgpyccEngine {
     // mainly internally used by processKeyEvent
     gboolean lastProcessKeyResult;
     guint32 lastKeyval;
-    pthread_mutex_t engineMutex;
+    pthread_mutex_t engineMutex, commitMutex;
     bool lastInputIsChinese;
     int preRequestRetry;
 
@@ -125,6 +125,7 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *prop_nam
 static void engineUpdatePreedit(IBusSgpyccEngine *engine);
 static void engineUpdateProperties(IBusSgpyccEngine * engine);
 static void engineUpdateAuxiliaryText(IBusSgpyccEngine * engine, string prefix = "");
+static void engineCommitText(IBusSgpyccEngine * engine, string content = "");
 
 // inline procedures
 inline static void engineClearLookupTable(IBusSgpyccEngine *engine);
@@ -216,8 +217,9 @@ static void engineInit(IBusSgpyccEngine *engine) {
     pthread_mutexattr_init(&engineMutexAttr);
     pthread_mutexattr_settype(&engineMutexAttr, PTHREAD_MUTEX_ERRORCHECK);
 
-    if (pthread_mutex_init(&engine->engineMutex, &engineMutexAttr)) {
-        fprintf(stderr, "can't create mutex.\nprogram aborted.");
+    if (pthread_mutex_init(&engine->engineMutex, &engineMutexAttr)
+            || pthread_mutex_init(&engine->commitMutex, &engineMutexAttr)) {
+        fprintf(stderr, "can't create engine mutex.\nprogram aborted.");
         exit(EXIT_FAILURE);
     }
 
@@ -302,6 +304,7 @@ static void engineDestroy(IBusSgpyccEngine *engine) {
 #define DELETE_G_OBJECT(x) if(x != NULL) g_object_unref(x), x = NULL;
     DEBUG_PRINT(1, "[ENGINE] Destroy\n");
     pthread_mutex_destroy(&engine->engineMutex);
+    pthread_mutex_destroy(&engine->commitMutex);
 
     // delete strings
     delete engine->cloudClient;
@@ -642,9 +645,7 @@ engineProcessKeyEventStart:
                         requestsResult += getGreedyLocalCovert(engine, it->requestString);
                     }
                 }
-                IBusText* text = ibus_text_new_from_string(requestsResult.c_str());
-                ibus_engine_commit_text((IBusEngine*) engine, text);
-                ibus_object_unref(text);
+                engineCommitText(engine, requestsResult);
                 engine->lastInputIsChinese = true;
                 res = TRUE;
                 break;
@@ -696,9 +697,7 @@ engineProcessKeyEventStart:
 
                         // selection may be up to date, then check
                         if (selection.length() > 0 && selection.find('\n') == string::npos) {
-                            IBusText *emptyText = ibus_text_new_from_static_string("");
-                            // delete selection
-                            ibus_engine_commit_text((IBusEngine*) engine, emptyText);
+                            engineCommitText(engine);
                             *engine->correctings = selection;
                             keyval = 0;
                             handled = true;
@@ -996,6 +995,18 @@ static void engineCursorDown(IBusSgpyccEngine * engine) {
     }
 }
 
+static void engineCommitText(IBusSgpyccEngine * engine, string content) {
+    pthread_mutex_lock(&engine->commitMutex);
+    IBusText *commitText = ibus_text_new_from_string(content.c_str());
+    if (commitText) {
+        ibus_engine_commit_text((IBusEngine *) engine, commitText);
+        ibus_object_unref(commitText);
+    } else {
+        fprintf(stderr, "[ERROR] can not create commitText.\n");
+    }
+    pthread_mutex_unlock(&engine->commitMutex);
+}
+
 static const vector<string> getPartialCacheConverts(IBusSgpyccEngine* engine, const string& pinyins) {
     vector<string> r;
     // check pre request result
@@ -1116,13 +1127,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     }
 
     if (commitString.length() > 0) {
-        IBusText *commitText = ibus_text_new_from_printf("%s", commitString.c_str());
-        if (commitText) {
-            ibus_engine_commit_text((IBusEngine *) engine, commitText);
-            ibus_object_unref(commitText);
-        } else {
-            fprintf(stderr, "[ERROR] can not create commitText.\n");
-        }
+        engineCommitText(engine, commitString);
         DEBUG_PRINT(4, "[ENGINE.UpdatePreedit] commited to client: %s\n", commitString.c_str());
     }
 
@@ -1407,6 +1412,7 @@ string externalFetcher(void* data, const string & requestString) {
     IBusSgpyccEngine* engine = (typeof (engine)) data;
     DEBUG_PRINT(2, "[ENGINE] fetchFunc(%s)\n", requestString.c_str());
 
+    // may cause dead lock if called from call lua function
     string res = getRequestCache(engine, requestString);
 
     if (res.empty()) {
@@ -1580,11 +1586,7 @@ int Engine::l_sendRequest(lua_State * L) {
     }
 
     // delete selection
-    IBusText *emptyText = ibus_text_new_from_static_string("");
-    ibus_engine_commit_text((IBusEngine*) engine, emptyText);
-    ibus_object_unref(emptyText);
-    // engine->lastInputIsChinese = true;
-    // engineUpdatePreedit(engine);
+    engineCommitText(engine);
 
     return 0; // return 0 value to lua code
 }

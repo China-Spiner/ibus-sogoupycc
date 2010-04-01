@@ -86,7 +86,7 @@ public:
     static LuaBinding& getLuaBinding(lua_State *L);
 private:
     LuaBinding(const LuaBinding& orig);
-    pthread_mutex_t luaStateMutex;
+    pthread_mutex_t luaStateAtomMutex, luaStateFunctionMutex;
 
     /**
      * allow .name (string key)

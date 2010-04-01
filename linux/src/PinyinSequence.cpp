@@ -17,12 +17,12 @@ void PinyinSequence::fromString(const string& pinyins, const char separator) {
         if (PinyinUtility::isRecognisedCharacter(pinyins.substr(pos, 3))) {
             if (!preprocessedPinyins.empty()) preprocessedPinyins += separator;
             preprocessedPinyins += pinyins.substr(pos, 3);
-            DEBUG_PRINT(7, "[PSEQ]  get chinese: '%s'\n", pinyins.substr(pos, 3).c_str());
+            DEBUG_PRINT(11, "[PSEQ]  get chinese: '%s'\n", pinyins.substr(pos, 3).c_str());
             pos += 3, state = 1;
         } else {
             if (state != 2) if (!preprocessedPinyins.empty()) preprocessedPinyins += separator;
             preprocessedPinyins += pinyins.substr(pos, 1);
-            DEBUG_PRINT(7, "[PSEQ]  get normal char: '%s'\n", pinyins.substr(pos, 1).c_str());
+            DEBUG_PRINT(11, "[PSEQ]  get normal char: '%s'\n", pinyins.substr(pos, 1).c_str());
             pos++, state = 2;
         }
     }
