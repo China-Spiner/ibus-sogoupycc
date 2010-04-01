@@ -1387,10 +1387,8 @@ const string getExecuteOutputWithTimeout(const string command, const long long t
                 receiveBuffer[readBytes] = 0;
                 output += receiveBuffer;
             } else {
-                // sleep a while, say, 0.01sec
-                // this is possibly never reached, because
-                // non-blocking IO setted, select() does the trick.
-                usleep(10000);
+                // no more to read, child process is now a zombie.
+                break;
             }
             // update timeLeft, check timeout
             long long timeNow = XUtility::getCurrentTime();
