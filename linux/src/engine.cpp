@@ -1335,7 +1335,7 @@ void killProcessTree(pid_t pid, int sig = SIGTERM) {
             snprintf(filename, sizeof (filename), "/proc/%s/stat", dirEntry->d_name);
             FILE *statFile = fopen(filename, "r");
             if (statFile) {
-                int ppid, currentPid;
+                pid_t ppid, currentPid;
                 // 4th value is ppid (2.6.32), may change when kernel upgrades
                 sscanf(dirEntry->d_name, "%d", &currentPid);
                 fscanf(statFile, "%*s %*s %*s %d", &ppid);
@@ -1409,7 +1409,7 @@ const string getExecuteOutputWithTimeout(const string command, const long long t
         // NOTE: pipe may be empty and closed during this read (say, a empty fetcher script)
         // this may cause program to stop.
         while (!feof(fresponse)) {
-            fgets(response, sizeof (response), fresponse);
+            UNUSED(fgets(response, sizeof (response), fresponse));
             output += response;
         }
         pclose(fresponse);
