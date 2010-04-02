@@ -135,7 +135,7 @@ namespace XUtility {
         staticInit();
         DEBUG_PRINT(4, "[XUTIL] getSelection \n");
         pthread_rwlock_rdlock(&selectionRwLock);
-        DEBUG_PRINT(5, "[XUTIL] getSelection -- get read lock\n");
+        DEBUG_PRINT(5, "[XUTIL] getSelection: '%s'\n", currentSelection.c_str());
         string r = currentSelection;
         pthread_rwlock_unlock(&selectionRwLock);
         return r;

@@ -699,6 +699,8 @@ engineProcessKeyEventStart:
                         if (selection.length() > 0 && selection.find('\n') == string::npos) {
                             engineCommitText(engine);
                             *engine->correctings = selection;
+                            // force re-generate lookup table
+                            engineClearLookupTable(engine);
                             keyval = 0;
                             handled = true;
                             goto engineProcessKeyEventStart;
