@@ -178,24 +178,24 @@ string PinyinDatabase::greedyConvert(const string& pinyins, const double longPhr
 }
 
 string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double longPhraseAdjust, int lengthLimit) {
-    // this may take a lot time
     DEBUG_PRINT(3, "[PYDB] greedyConvert: %s\n", pinyins.toString().c_str());
+
+    string r;
+    if (!db) return r;
+
     if (sqlite3_threadsafe()) {
         DEBUG_PRINT(3, "[PYDB] sqlite3 is thread safe\n");
     } else {
         ibus_warning("sqlite is not thread safe! program is likely to crash soon.\n");
     }
-    // result
-    string r;
-    if (!db) return r;
 
     if (lengthLimit > PINYIN_DB_ID_MAX) lengthLimit = PINYIN_DB_ID_MAX;
     else if (lengthLimit < 1) lengthLimit = 1;
 
-    // build query statement
+    // build query SQL
     for (int id = (int) pinyins.size() - 1; id >= 0;) {
         int matchLength = 0;
-        // check cache first.
+        // check cache first
         string phrase = Configuration::getGlobalCache(pinyins.toString(0, id + 1), true);
 
         if (phrase.empty()) {
@@ -221,9 +221,8 @@ string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double
                         " AS freqadj FROM main.py_phrase_" << l - 1 << " WHERE " << queryWhere.str();
             }
             query << string(") GROUP BY phrase ORDER BY freqadj DESC LIMIT 1");
-            //puts(query.str().c_str());
-            sqlite3_stmt *stmt;
 
+            sqlite3_stmt *stmt;
             if (sqlite3_prepare_v2(db, query.str().c_str(), query.str().length(), &stmt, NULL) != SQLITE_OK) return r;
 
             for (bool running = true; running;) {
@@ -261,7 +260,6 @@ string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double
             sqlite3_finalize(stmt);
         } else {
             DEBUG_PRINT(3, "[PYDB] got cache[%s] = %s\n", pinyins.toString(0, id + 1).c_str(), phrase.c_str());
-
         }
         matchLength = (int) g_utf8_strlen(phrase.c_str(), -1);
 
@@ -275,7 +273,7 @@ string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double
         }
 
         if (id < 0) {
-            // all finish
+            // all done
             break;
         }
     }
