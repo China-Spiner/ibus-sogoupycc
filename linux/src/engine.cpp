@@ -149,7 +149,7 @@ static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string&
 static const vector<string> queryCloudMemoryDatabase(const string& pinyins);
 
 inline void ibus_object_unref(gpointer object) {
-#if !IBUS_CHECK_VERSION(1, 3, 0)
+#if !IBUS_CHECK_VERSION(1, 2, 98)
     g_object_unref(G_OBJECT(object));
 #endif
 }
@@ -254,7 +254,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->candicateCount = 0;
     engine->lookupTableLabelCount = Configuration::tableLabelKeys.size();
     engine->table = ibus_lookup_table_new(engine->lookupTableLabelCount, 0, 0, 0);
-#if IBUS_CHECK_VERSION(1, 3, 0)
+#if IBUS_CHECK_VERSION(1, 2, 98)
     g_object_ref_sink(engine->table);
 #endif
 
@@ -285,7 +285,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, ibus_text_new_from_static_string("云服务器请求状态"), TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     engine->extensionMenuProp = ibus_property_new("extensionMenu", PROP_TYPE_MENU, NULL, PKGDATADIR "/icons/extensions.png", ibus_text_new_from_static_string("用户扩展"), TRUE, TRUE, PROP_STATE_INCONSISTENT, Configuration::extensionList);
 
-#if IBUS_CHECK_VERSION(1, 3, 0)
+#if IBUS_CHECK_VERSION(1, 2, 98)
     g_object_ref_sink(engine->propList);
     g_object_ref_sink(engine->engModeProp);
     g_object_ref_sink(engine->requestingProp);
@@ -1097,7 +1097,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     size_t preeditLen = 0;
     IBusAttrList *textAttrList = ibus_attr_list_new();
 
-#if IBUS_CHECK_VERSION(1, 3, 0)
+#if IBUS_CHECK_VERSION(1, 2, 98)
     g_object_ref_sink(textAttrList);
 #endif
     for (size_t i = 0; i < requestCount; ++i) {
