@@ -144,7 +144,7 @@ static const string getRequestCache(IBusSgpyccEngine* engine, const string& requ
 static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSring, const string& content, const bool weak = false);
 
 // paritical convert (using cache)
-static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const string& pinyins, string* remainingPinyins = NULL, const bool includeWeak = false);
+static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const string& pinyins, string* remainingPinyins = NULL, const bool includeWeak = false, const size_t reservedPinyinCount = 0);
 static const vector<string> getPartialCacheConverts(IBusSgpyccEngine* engine, const string& pinyins);
 static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string& pinyins);
 static const vector<string> queryCloudMemoryDatabase(const string& pinyins);
@@ -636,9 +636,9 @@ engineProcessKeyEventStart:
                 break;
             }
 
-            // check force commit all key first
+            // check force commit all key first (not including current preedit)
             if (requestCount > 0 && Configuration::quickResponseKey.match(keyval)) {
-                // force convertall requests rightnow
+                // force convert all requests right now
                 string requestsResult;
                 std::vector<PinyinCloudRequest> requests = engine->cloudClient->exportAndRemoveAllRequest();
                 for (std::vector<PinyinCloudRequest>::iterator it = requests.begin(); it != requests.end(); ++it) {
@@ -650,6 +650,14 @@ engineProcessKeyEventStart:
                 }
                 engineCommitText(engine, requestsResult);
                 engine->lastInputIsChinese = true;
+                res = TRUE;
+                break;
+            }
+            
+            if (!engine->preedit->empty() && Configuration::commitRawPreeditKey.match(keyval)) {
+                // raw commit preedit
+                engine->cloudClient->request(*(engine->preedit), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+                *(engine->preedit) = "";
                 res = TRUE;
                 break;
             }
@@ -665,6 +673,7 @@ engineProcessKeyEventStart:
             } else if (keyval == IBUS_Tab) {
                 keychrs = "\t";
             }
+
 
             // in chinese mode ?
             if (!engine->engMode) {
@@ -1029,11 +1038,11 @@ static const vector<string> getPartialCacheConverts(IBusSgpyccEngine* engine, co
     return r;
 }
 
-static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const string& pinyins, string* pRemainingPinyins, const bool includeWeak) {
+static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const string& pinyins, string* pRemainingPinyins, const bool includeWeak, const size_t reservedPinyinCount) {
     if (Configuration::showCachedInPreedit == false) return pinyins;
     // check pre request result
     PinyinSequence ps = pinyins;
-    for (size_t i = ps.size(); i > 0; i--) {
+    for (size_t i = ps.size() - reservedPinyinCount; i > 0; i--) {
         if (i < ps.size() || PinyinUtility::isValidPinyin(ps[i - 1])) {
             string cache = getRequestCache(engine, ps.toString(0, i), includeWeak);
             DEBUG_PRINT(5, "[ENGINE] partical convert find cache: %s\n", cache.c_str());
@@ -1144,11 +1153,11 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
         activePreedit = engine->correctings->toString();
     } else if (Configuration::showCachedInPreedit) {
         if (Configuration::preRequestFallback) {
-            string activePreeditAlternative = getPartialCacheConvert(engine, activePreedit, &remainingPinyins);
-            activePreedit = getPartialCacheConvert(engine, activePreedit, &remainingPinyins, true);
+            string activePreeditAlternative = getPartialCacheConvert(engine, activePreedit, &remainingPinyins, false, Configuration::preeditReservedPinyinCount);
+            activePreedit = getPartialCacheConvert(engine, activePreedit, &remainingPinyins, true, Configuration::preeditReservedPinyinCount);
             isLocalDatabaseResult = (activePreeditAlternative != activePreedit);
         } else {
-            activePreedit = getPartialCacheConvert(engine, activePreedit, &remainingPinyins, false);
+            activePreedit = getPartialCacheConvert(engine, activePreedit, &remainingPinyins, false, Configuration::preeditReservedPinyinCount);
         }
     } else {
         remainingPinyins = activePreedit;

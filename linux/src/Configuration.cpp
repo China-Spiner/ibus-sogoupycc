@@ -45,7 +45,7 @@ namespace Configuration {
             pageDownKey = 'h',
             pageUpKey = 'g',
             quickResponseKey = IBUS_Alt_R,
-            submitRawKey = IBUS_Shift_R;
+            commitRawPreeditKey = IBUS_Shift_R;
 
     // boolean configs
     bool useDoublePinyin = false;
@@ -63,6 +63,7 @@ namespace Configuration {
     // int
     int fallbackEngTolerance = 5;
     int preRequestRetry = 4;
+    int preeditReservedPinyinCount = 0;
 
     // pre request timeout
     double preRequestTimeout = 1.2;
@@ -467,10 +468,7 @@ namespace Configuration {
         pageDownKey.readFromLua(lb, "page_down_key");
         pageUpKey.readFromLua(lb, "page_up_key");
         quickResponseKey.readFromLua(lb, "quick_response_key");
-
-        // int, tolerances
-        fallbackEngTolerance = lb.getValue("auto_eng_tolerance", fallbackEngTolerance);
-        preRequestRetry = lb.getValue("pre_request_retry", preRequestRetry);
+        commitRawPreeditKey.readFromLua(lb, "raw_preedit_key");
 
         // bools
         staticNotification = lb.getValue("static_notification", staticNotification);
@@ -485,6 +483,15 @@ namespace Configuration {
         useAlternativePopen = lb.getValue("strict_timeout", useAlternativePopen);
         preRequestFallback = lb.getValue("fallback_pre_request", preRequestFallback);
         if (preRequestFallback || preRequest) writeRequestCache = true;
+
+        // int, tolerances
+        fallbackEngTolerance = lb.getValue("auto_eng_tolerance", fallbackEngTolerance);
+        preRequestRetry = lb.getValue("pre_request_retry", preRequestRetry);
+        int newPreeditReservedPinyinCount = -1;
+        newPreeditReservedPinyinCount = lb.getValue("preedit_reserved_pinyin", newPreeditReservedPinyinCount);
+        if (newPreeditReservedPinyinCount == -1) {
+            preeditReservedPinyinCount = useDoublePinyin ? 0 : 1;
+        } else preeditReservedPinyinCount = newPreeditReservedPinyinCount;
 
         // labels used in lookup table, ibus has 16 chars limition.
         {

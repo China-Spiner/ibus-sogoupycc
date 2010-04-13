@@ -95,6 +95,7 @@ namespace Configuration {
     // buffer size receive return string from fetcher script
     extern const int fetcherBufferSize;
     extern int preRequestRetry;
+    extern int preeditReservedPinyinCount;
 
     // keys used in select item in lookup table
     extern vector<ImeKey> tableLabelKeys;
@@ -112,7 +113,7 @@ namespace Configuration {
     extern int internalCandicateColor;
 
     // keys
-    extern ImeKey startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey, quickResponseKey, submitRawKey;
+    extern ImeKey startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey, quickResponseKey, commitRawPreeditKey;
 
     // boolean configs
     extern bool useDoublePinyin;
