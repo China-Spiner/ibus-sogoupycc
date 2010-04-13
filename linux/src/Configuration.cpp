@@ -487,11 +487,7 @@ namespace Configuration {
         // int, tolerances
         fallbackEngTolerance = lb.getValue("auto_eng_tolerance", fallbackEngTolerance);
         preRequestRetry = lb.getValue("pre_request_retry", preRequestRetry);
-        int newPreeditReservedPinyinCount = -1;
-        newPreeditReservedPinyinCount = lb.getValue("preedit_reserved_pinyin", newPreeditReservedPinyinCount);
-        if (newPreeditReservedPinyinCount == -1) {
-            preeditReservedPinyinCount = useDoublePinyin ? 0 : 1;
-        } else preeditReservedPinyinCount = newPreeditReservedPinyinCount;
+        preeditReservedPinyinCount = lb.getValue("preedit_reserved_pinyin", preeditReservedPinyinCount);
 
         // labels used in lookup table, ibus has 16 chars limition.
         {

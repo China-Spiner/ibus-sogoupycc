@@ -658,6 +658,8 @@ engineProcessKeyEventStart:
                 // raw commit preedit
                 engine->cloudClient->request(*(engine->preedit), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                 *(engine->preedit) = "";
+                *(engine->activePreedit) = "";
+                engine->lastInputIsChinese = false;
                 res = TRUE;
                 break;
             }
