@@ -79,7 +79,7 @@ void* staticInitThreadFunc(void*) {
     return NULL;
 }
 
-int main(int argc, char *argv[]) {  
+int main(int argc, char *argv[]) {
     // version
     if (argc > 1 && strstr(argv[1], "-v")) {
         printf("ibus-sogoupycc version: %s\n", VERSION);

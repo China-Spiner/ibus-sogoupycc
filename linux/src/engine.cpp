@@ -751,7 +751,7 @@ engineProcessKeyEventStart:
 
                     if (fallbackToFullPinyin || !Configuration::useDoublePinyin) {
                         if ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0)) {
-                            if (keyval == '\'') keychr = ' ';
+                            //if (keyval == '\'') keychr = ' ';
                             *engine->preedit += keychr;
                             engine->lastInputIsChinese = true;
                             handled = true;
@@ -1202,6 +1202,13 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
         // cursor at left of active preedit
         ibus_engine_update_preedit_text((IBusEngine *) engine, preeditText, preeditLen, TRUE);
     }
+
+    if (preedit.empty()) {
+        ibus_engine_hide_preedit_text((IBusEngine *) engine);
+    } else {
+        ibus_engine_show_preedit_text((IBusEngine *) engine);
+    }
+
     // remember to unref text
     ibus_object_unref(preeditText);
 

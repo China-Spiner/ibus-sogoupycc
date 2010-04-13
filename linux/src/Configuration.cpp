@@ -60,7 +60,7 @@ namespace Configuration {
     bool useAlternativePopen = true;
 
     // int
-    int fallbackEngTolerance = 3;
+    int fallbackEngTolerance = 5;
     int preRequestRetry = 4;
 
     // pre request timeout
@@ -363,6 +363,15 @@ namespace Configuration {
         return autoWidthPunctuations.find(punc) != string::npos;
     }
 
+    const string getFullPinyinTailAdjusted(const string& fullPinyinString) {
+        for (size_t i = 0; i < fullPinyinString.length(); i++){
+            string s = LuaBinding::getStaticBinding().getValue((string("full_pinyin_adjustments.") + fullPinyinString.substr(i)).c_str(), "");
+            if (!s.empty())
+                return (fullPinyinString.substr(0, i) + s);
+        }
+        return fullPinyinString;
+    }
+    
     const string getGlobalCache(const string& requestString, const bool includeWeak) {
         string content = LuaBinding::getStaticBinding().getValue(requestString.c_str(), "", "request_cache");
         if (content.substr(0, sizeof (WEAK_CACHE_PREFIX) - 1) == string(WEAK_CACHE_PREFIX)) {

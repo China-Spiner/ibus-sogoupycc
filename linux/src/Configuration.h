@@ -157,7 +157,9 @@ namespace Configuration {
     bool activeExtension(unsigned keyval, unsigned keymask);
     bool isPunctuationAutoWidth(char punctuation);
     const string getGlobalCache(const string& requestString, const bool includeWeak = false);
+    const string getFullPinyinTailAdjusted(const string& fullPinyinString);
     void writeGlobalCache(const string& requsetSring, const string& content, const bool weak = false);
+
 
     // lua C functions
     /**

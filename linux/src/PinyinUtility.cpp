@@ -35,16 +35,20 @@ const string PinyinUtility::separatePinyins(const string& pinyins) {
 
     // match unparsedPinyins as long as possible in partialPinyin
     while (!unparsedPinyins.empty()) {
-        if (r.length() > 0 && r.data()[r.length() - 1] != ' ') r += ' ';
+        if (r.length() > 0 && r.data()[r.length() - 1] != ' ' && r.data()[r.length() - 1] != '\'') r += ' ';
         bool breaked = false;
         for (int i = VALID_PINYIN_MAX_LENGTH; i > 0; --i) {
             if (validPartialPinyins.find(unparsedPinyins.substr(0, i)) != validPartialPinyins.end()) {
                 // consider a futher step, next one ?
                 // this should help to avoid some greedy failure case
-                string nextOne;
-                if (unparsedPinyins.length() > (size_t) i) nextOne = unparsedPinyins.substr(i, 1);
-                if (nextOne.empty() || nextOne == "'" || nextOne == " " || isValidPartialPinyin(nextOne)) {
+                string nextChar;
+                if (unparsedPinyins.length() > (size_t) i) nextChar = unparsedPinyins.substr(i, 1);
+                if (nextChar.empty() || nextChar == "'" || nextChar == " " || isValidPartialPinyin(nextChar)) {
+                    // confirm separate
                     r += unparsedPinyins.substr(0, i);
+                    // use Configuration::getFullPinyinTailAdjusted to adjust full pinyins
+                    r = Configuration::getFullPinyinTailAdjusted(r);
+                    if (nextChar == "'") r += "'";
                     unparsedPinyins.erase(0, i);
                     breaked = true;
                     break;
@@ -55,8 +59,12 @@ const string PinyinUtility::separatePinyins(const string& pinyins) {
 
         // cannot parse anyway, just eat one char:
         // and ignore space
-        if (unparsedPinyins[0] != ' ') r += unparsedPinyins[0];
+        if (unparsedPinyins[0] != ' ' && unparsedPinyins[0] != '\'') r += unparsedPinyins[0];
         unparsedPinyins.erase(0, 1);
+    }
+    // replace "'" to " "
+    for (string::iterator it = r.begin(); it != r.end(); ++it) {
+        if (*it == '\'') *it = ' ';
     }
     return r;
 }
@@ -68,7 +76,7 @@ const bool PinyinUtility::isRecognisedCharacter(const string& character) {
 const bool PinyinUtility::isCharactersPinyinsMatch(const string& characters, const string& pinyins) {
     PinyinSequence ps = pinyins;
     // IMPROVE: handle utf-8 using glib
-    if (ps.size() != g_utf8_strlen(characters.c_str(), -1)) return false;
+    if (ps.size() != (size_t) g_utf8_strlen(characters.c_str(), -1)) return false;
     for (size_t i = 0; i < ps.size(); i++) {
         if (!isCharacterPinyinMatch(characters.substr(i * 3, 3), ps[i])) {
             return false;
