@@ -62,6 +62,7 @@ public:
      * callbackFunc can be NULL, fetchFunc can't
      */
     void request(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam);
+    void updateRequestInAdvance(const string requestString, const string responseString);
     static void preRequest(const string requestString, FetchFunc fetchFunc, void* fetchParam, ResponseCallbackFunc callbackFunc, void* callbackParam);
     void removeFirstRequest(int count = 1);
     void removeLastRequest();

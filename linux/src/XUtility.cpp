@@ -153,7 +153,7 @@ namespace XUtility {
      * out: -
      */
     static int l_notify(lua_State *L) {
-        DEBUG_PRINT(2, "[LUABIND] l_notify\n");
+        DEBUG_PRINT(2, "[LUA] l_notify\n");
         if (lua_type(L, 1) == LUA_TNONE) {
             luaL_error(L, "notify: require parameters.");
             lua_pushboolean(L, false);
@@ -173,7 +173,7 @@ namespace XUtility {
      * out: string
      */
     static int l_getSelection(lua_State * L) {
-        DEBUG_PRINT(2, "[LUABIND] l_getSelection\n");
+        DEBUG_PRINT(2, "[LUA] l_getSelection\n");
         lua_checkstack(L, 1);
         lua_pushstring(L, XUtility::getSelection().c_str());
         return 1;

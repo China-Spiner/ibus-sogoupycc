@@ -256,6 +256,28 @@ vector<PinyinCloudRequest> PinyinCloudClient::exportAndRemoveAllRequest() {
     return r;
 }
 
+void PinyinCloudClient::updateRequestInAdvance(const string requestString, const string responseString) {
+    DEBUG_PRINT(3, "[CLOUD] updateRequestInAdvance\n");
+    pthread_rwlock_wrlock(&requestsLock);
+    for (size_t i = 0; i < requests.size(); ++i) {
+        PinyinCloudRequest& request = requests[i];
+        if (request.responsed == false && requests[i].requestString == requestString) {
+            request.requestId = ++nextRequestId;
+            request.responseString = responseString;
+            request.responsed = true;
+            // unlock before callback
+            pthread_rwlock_unlock(&requestsLock);
+            if (request.callbackFunc) {
+                DEBUG_PRINT(4, "[CLOUD.UPDATE.INADVANCE] prepare execute callback\n");
+                (*request.callbackFunc)(request.callbackParam);
+            }
+            return;
+        }
+    }
+    pthread_rwlock_unlock(&requestsLock);
+    return;
+}
+
 PinyinCloudClient::PinyinCloudClient(const PinyinCloudClient& orig) {
 }
 

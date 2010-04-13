@@ -523,7 +523,7 @@ void PinyinDatabase::getPinyinIDs(const string pinyin, int& consonantId, int& vo
  * out: int
  */
 int PinyinDatabase::l_getPhraseDatabaseLoadedCount(lua_State* L) {
-    DEBUG_PRINT(3, "[LUABIND] l_getPhraseDatabaseLoadedCount\n");
+    DEBUG_PRINT(3, "[LUA] l_getPhraseDatabaseLoadedCount\n");
     lua_checkstack(L, 1);
     lua_pushinteger(L, PinyinDatabase::pinyinDatabases.size());
     return 1;
@@ -535,7 +535,7 @@ int PinyinDatabase::l_getPhraseDatabaseLoadedCount(lua_State* L) {
  * out: int
  */
 int PinyinDatabase::l_loadPhraseDatabase(lua_State* L) {
-    DEBUG_PRINT(3, "[LUABIND] l_loadPhraseDatabase\n");
+    DEBUG_PRINT(3, "[LUA] l_loadPhraseDatabase\n");
     luaL_checktype(L, 1, LUA_TSTRING);
     lua_checkstack(L, 1);
 

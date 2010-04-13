@@ -66,7 +66,7 @@ namespace Configuration {
     int preeditReservedPinyinCount = 0;
 
     // pre request timeout
-    double preRequestTimeout = 1.2;
+    double preRequestTimeout = 0.8;
     double requestTimeout = 12.;
 
     // selection timeout tolerance
@@ -525,7 +525,7 @@ namespace Configuration {
         autoWidthPunctuations = string(lb.getValue("punc_after_chinese", ".,?:"));
 
         if (lb.getValueType("punc_map") == LUA_TTABLE) {
-            DEBUG_PRINT(4, "[LUABIND] read punc_map\n");
+            DEBUG_PRINT(4, "[LUA] read punc_map\n");
             punctuationMap.clear();
             // IMPROVE: some lock here?
             int pushedCount = lb.reachValue("punc_map");
@@ -549,16 +549,16 @@ namespace Configuration {
                 switch (lua_type(L, -1)) {
                     case LUA_TSTRING:
                         // single punc
-                        DEBUG_PRINT(4, "[LUABIND] single punc: %s\n", lua_tostring(L, -1));
+                        DEBUG_PRINT(4, "[LUA] single punc: %s\n", lua_tostring(L, -1));
                         fpunc.addPunctuation(lua_tostring(L, -1));
                         break;
                     case LUA_TTABLE:
                         // multi puncs
-                        DEBUG_PRINT(4, "[LUABIND] multi punc\n");
+                        DEBUG_PRINT(4, "[LUA] multi punc\n");
                         for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
                             // value should be string
                             luaL_checktype(L, -1, LUA_TSTRING);
-                            DEBUG_PRINT(5, "[LUABIND]   punc: %s\n", lua_tostring(L, -1));
+                            DEBUG_PRINT(5, "[LUA]   punc: %s\n", lua_tostring(L, -1));
                             fpunc.addPunctuation(lua_tostring(L, -1));
                         }
                         // after the loop, the key and value of inner table are all popped

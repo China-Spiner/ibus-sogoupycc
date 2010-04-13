@@ -100,6 +100,8 @@ static IBusEngineClass *parentClass = NULL;
 // statistics (static vars, otherwise data may not enough)
 static int totalRequestCount = 0;
 static int totalFailedRequestCount = 0;
+static int totalPreRequestCount = 0;
+static int totalFailedPreRequestCount = 0;
 static double totalResponseTime = .0;
 static double maximumResponseTime = .0;
 
@@ -653,7 +655,7 @@ engineProcessKeyEventStart:
                 res = TRUE;
                 break;
             }
-            
+
             if (!engine->preedit->empty() && Configuration::commitRawPreeditKey.match(keyval)) {
                 // raw commit preedit
                 engine->cloudClient->request(*(engine->preedit), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
@@ -880,7 +882,9 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName
         if (totalRequestCount == 0) {
             snprintf(statisticsBuffer, sizeof (statisticsBuffer), "现在还没有数据\n");
         } else {
-            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "已发送请求: %d 个\n失败的请求: %d 个\n平均响应时间: %.3lf 秒\n最慢响应时间: %.3lf 秒\n", totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime);
+            snprintf(statisticsBuffer, sizeof (statisticsBuffer),
+                    "已发送请求: %d 个\n失败或超时的请求: %d 个\n平均响应时间: %.3lf 秒\n最慢响应时间: %.3lf 秒\n已发送预请求: %d 个\n失败或超时的预请求: %d 个",
+                    totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime, totalPreRequestCount, totalFailedPreRequestCount);
         }
         if (Configuration::showNotification) {
             XUtility::showNotify("统计数据", statisticsBuffer);
@@ -1545,6 +1549,7 @@ static string preFetcher(void* data, const string& requestString) {
         }
 
         if (res.empty()) {
+            totalFailedPreRequestCount++;
             res = getRequestCache(engine, requestString, true);
             if (res.empty()) {
                 if (Configuration::preRequestFallback) {
@@ -1558,13 +1563,11 @@ static string preFetcher(void* data, const string& requestString) {
                 }
             }
         } else {
-            // update statistics
-            totalRequestCount++;
-            double requestTime = (XUtility::getCurrentTime() - startMicrosecond) / (double) XUtility::MICROSECOND_PER_SECOND;
-            totalResponseTime += requestTime;
-            if (requestTime > maximumResponseTime) maximumResponseTime = requestTime;
+            // success, update statistics
+            totalPreRequestCount++;
 
             if (Configuration::writeRequestCache && requestString != res) writeRequestCache(engine, requestString, res);
+            engine->cloudClient->updateRequestInAdvance(requestString, res);
         }
     }
     return res;
@@ -1588,6 +1591,7 @@ static string luaFetcher(void* voidData, const string & requestString) {
 }
 
 namespace ImeEngine {
+
     static int l_commitText(lua_State * L) {
         lua_tostring(L, 1);
         DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));

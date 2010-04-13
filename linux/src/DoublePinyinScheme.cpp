@@ -173,7 +173,7 @@ int DoublePinyinScheme::l_setDoublePinyinScheme(lua_State *L) {
  * out: boolean
  */
 int DoublePinyinScheme::l_isValidDoublePinyin(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_isValidDoublePinyin\n");
+    DEBUG_PRINT(2, "[LUA] l_isValidDoublePinyin\n");
     LuaBinding& lib = LuaBinding::getLuaBinding(L);
     pthread_mutex_lock(lib.getAtomMutex());
     luaL_checktype(L, 1, LUA_TSTRING);
@@ -188,7 +188,7 @@ int DoublePinyinScheme::l_isValidDoublePinyin(lua_State *L) {
  * out: string
  */
 int DoublePinyinScheme::l_doubleToFullPinyin(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_doubleToFullPinyin\n");
+    DEBUG_PRINT(2, "[LUA] l_doubleToFullPinyin\n");
     LuaBinding& lib = LuaBinding::getLuaBinding(L);
     pthread_mutex_lock(lib.getAtomMutex());
     luaL_checktype(L, 1, LUA_TSTRING);
