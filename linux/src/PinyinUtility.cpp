@@ -105,6 +105,10 @@ const bool PinyinUtility::isValidPartialPinyin(const string& pinyin) {
     return validPartialPinyins.count(pinyin) > 0;
 }
 
+void PinyinUtility::staticDestruct() {
+
+}
+
 void PinyinUtility::staticInit() {
     gb2312pinyinMap.clear();
     // hardcoded gb2312 pinyin map
@@ -186,3 +190,41 @@ const string PinyinUtility::charactersToPinyins(const string& characters, size_t
         return r;
     }
 }
+
+// Lua C Functions
+
+/**
+ * in: string
+ * out: boolean
+ */
+static int l_isValidPinyin(lua_State *L) {
+    DEBUG_PRINT(2, "[LUA] l_isValidPinyin\n");
+    LuaBinding& lib = LuaBinding::getLuaBinding(L);
+    pthread_mutex_lock(lib.getAtomMutex());
+    luaL_checktype(L, 1, LUA_TSTRING);
+    lua_checkstack(L, 1);
+    lua_pushboolean(L, PinyinUtility::isValidPinyin(lua_tostring(L, 1)));
+    pthread_mutex_unlock(lib.getAtomMutex());
+    return 1;
+}
+
+/**
+ * in: string
+ * out: string
+ */
+static int l_charsToPinyin(lua_State *L) {
+    DEBUG_PRINT(2, "[LUA] l_charsToPinyin\n");
+    LuaBinding& lib = LuaBinding::getLuaBinding(L);
+    pthread_mutex_lock(lib.getAtomMutex());
+    luaL_checktype(L, 1, LUA_TSTRING);
+    lua_checkstack(L, 1);
+    lua_pushstring(L, PinyinUtility::charactersToPinyins(lua_tostring(L, 1), 0).c_str());
+    pthread_mutex_unlock(lib.getAtomMutex());
+    return 1;
+}
+
+void PinyinUtility::registerLuaFunctions() {
+    LuaBinding::getStaticBinding().registerFunction(l_charsToPinyin, "chars_to_pinyin");
+    LuaBinding::getStaticBinding().registerFunction(l_isValidPinyin, "is_valid_pinyin");
+}
+

@@ -15,14 +15,11 @@ extern "C" {
 }
 
 #include <map>
-#include "PinyinUtility.h"
-#include "PinyinCloudClient.h"
-#include "PinyinDatabase.h"
-#include "DoublePinyinScheme.h"
-#include "PinyinSequence.h"
+#include <string>
 
 using std::map;
 using std::pair;
+using std::string;
 
 class LuaBinding {
 public:
@@ -49,6 +46,15 @@ public:
     virtual ~LuaBinding();
     int doString(const char* luaScript, bool locked = false);
 
+    /**
+     * allow .name (string key)
+     * allow ..num (num key)
+     * stop at non-table (may be not nil)
+     * Intended to use privately
+     * @return pushed count
+     */
+    int reachValue(const char* varName, const char* libName = LIB_NAME);
+
 
     /**
      * call a lua function in LIB_NAME table
@@ -64,12 +70,9 @@ public:
      * do not use in multi-threads
      */
     int callLuaFunction(const char*const func, const char* sig, ...);
-    void addFunction(const lua_CFunction func, const char * funcName);
+    void registerFunction(const lua_CFunction func, const char * funcName);
 
     const lua_State* getLuaState() const;
-
-    static DoublePinyinScheme doublePinyinScheme;
-    static map<string, PinyinDatabase*> pinyinDatabases;
 
     /**
      * load global config
@@ -84,17 +87,11 @@ public:
     static void staticDestruct();
     static LuaBinding& getStaticBinding();
     static LuaBinding& getLuaBinding(lua_State *L);
+
+    pthread_mutex_t* getAtomMutex();
 private:
     LuaBinding(const LuaBinding& orig);
     pthread_mutex_t luaStateAtomMutex, luaStateFunctionMutex;
-
-    /**
-     * allow .name (string key)
-     * allow ..num (num key)
-     * stop at non-table (may be not nil)
-     * @return pushed count
-     */
-    int reachValue(const char* varName, const char* libName = LIB_NAME);
 
     static LuaBinding* staticLuaBinding;
     // Lua C functions related
@@ -102,39 +99,6 @@ private:
     static const struct luaL_Reg luaLibraryReg[];
     static map<const lua_State*, LuaBinding*> luaStates;
 
-    /**
-     * in: table
-     * out: int
-     */
-    static int l_setDoublePinyinScheme(lua_State *L);
-    /**
-     * call this after setDoublePinyinScheme
-     * in: string
-     * out: boolean
-     */
-    static int l_isValidDoublePinyin(lua_State *L);
-    /**
-     * in: string
-     * out: string
-     */
-    static int l_doubleToFullPinyin(lua_State *L);
-
-    /**
-     * in: string
-     * out: string
-     */
-    static int l_charsToPinyin(lua_State *L);
-    /**
-     * in: string
-     * out: boolean
-     */
-    static int l_isValidPinyin(lua_State *L);
-    /**
-     * set global debug level
-     * in: int
-     * out: -
-     */
-    static int l_setDebugLevel(lua_State *L);
     /**
      * in: int, int
      * out: int
@@ -151,52 +115,17 @@ private:
      */
     static int l_bitxor(lua_State *L);
     /**
-     * in: int(state), int(mask)
-     * out: boolean
-     */
-    static int l_keymask(lua_State *L);
-    /**
      * print lua stack, for debugging
      * in: -
      * out: -
      */
     static int l_printStack(lua_State *L);
     /**
-     * load pinyin database (ibus-pinyin 1.2.99 compatible)
-     * in: string, double
-     * out: int
-     */
-    static int l_loadPhraseDatabase(lua_State *L);
-    /**
-     * get database loaded count
-     * in: -
-     * out: int
-     */
-    static int l_getPhraseDatabaseLoadedCount(lua_State* L);
-    /**
-     * apply global settings immediately
-     * in: -
-     * out: -
-     */
-    static int l_applySettings(lua_State* L);
-    /**
-     * get selection
-     * in: -
-     * out: string
-     */
-    static int l_getSelection(lua_State * L);
-    /**
      * do lua script
      * in: string
      * out: bool
      */
     static int l_executeScript(lua_State * L);
-    /**
-     * show notify
-     * in: string summary, string body(optional), string icon_path(optional)
-     * out: -
-     */
-    static int l_notify(lua_State *L);
 };
 
 #endif	/* _LUAIBUSBINDING_H */

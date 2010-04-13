@@ -14,12 +14,9 @@
 #include <cassert>
 #include <ibus.h>
 
-// pthread_mutex_lock
-// #define pthread_mutex_lock_debug(x) {fprintf(stdout, "lock in L%03d (thread 0x%x) 0x%x ...", __LINE__, (int)pthread_self(), (int)x); pthread_mutex_lock(x); printf("done.\n");}
-// #define pthread_mutex_unlock_debug(x) {fprintf(stdout, "unlock in L%03d (thread 0x%x) 0x%x ...", __LINE__, (int)pthread_self(), (int)x); pthread_mutex_unlock(x); printf("done.\n");}
-
 // Lua C functions
-// IMPROVE: Reconsider where should I put these lua C functions.
+
+#define IME_LIBRARY_NAME "ime"
 
 int LuaBinding::l_executeScript(lua_State * L) {
     DEBUG_PRINT(2, "[LUABIND] l_executeScript\n");
@@ -28,211 +25,6 @@ int LuaBinding::l_executeScript(lua_State * L) {
     int r = lb.doString(lua_tostring(L, 1));
     lua_pushboolean(L, r == 0);
     return 1;
-}
-
-int LuaBinding::l_getSelection(lua_State * L) {
-    DEBUG_PRINT(2, "[LUABIND] l_getSelection\n");
-    lua_checkstack(L, 1);
-    lua_pushstring(L, XUtility::getSelection().c_str());
-    return 1;
-}
-
-int LuaBinding::l_notify(lua_State * L) {
-    DEBUG_PRINT(2, "[LUABIND] l_notify\n");
-    if (lua_type(L, 1) == LUA_TNONE) {
-        luaL_error(L, "notify: require parameters.");
-        lua_pushboolean(L, false);
-        return 1;
-    }
-    const char* summary = lua_tostring(L, 1);
-    const char* body = lua_type(L, 2) == LUA_TSTRING ? lua_tostring(L, 2) : NULL;
-    const char* iconPath = lua_type(L, 3) == LUA_TSTRING ? lua_tostring(L, 3) : (PKGDATADIR "/icons/extensions.png");
-    lua_checkstack(L, 1);
-    lua_pushboolean(L, XUtility::showNotify(summary, body, iconPath));
-    return 1;
-}
-
-int LuaBinding::l_applySettings(lua_State* L) {
-    DEBUG_PRINT(3, "[LUABIND] l_applySettings\n");
-    LuaBinding& lb = *luaStates[L];
-
-    // multi-tone chinese lookup result limit
-    Configuration::multiToneLimit = lb.getValue("multi_tone_limit", Configuration::multiToneLimit);
-
-    // database confs
-    Configuration::dbResultLimit = lb.getValue("db_result_limit", Configuration::dbResultLimit);
-    Configuration::dbLengthLimit = lb.getValue("db_length_limit", Configuration::dbLengthLimit);
-    Configuration::dbLongPhraseAdjust = lb.getValue("db_phrase_adjust", Configuration::dbLongPhraseAdjust);
-    Configuration::dbCompleteLongPhraseAdjust = lb.getValue("db_completion_adjust", Configuration::dbCompleteLongPhraseAdjust);
-    Configuration::dbOrder = string(lb.getValue("db_query_order", Configuration::dbOrder.c_str()));
-
-    // colors (-1: use default)
-    Configuration::preeditForeColor = lb.getValue("preedit_fore_color", Configuration::preeditForeColor);
-    Configuration::preeditBackColor = lb.getValue("preedit_back_color", Configuration::preeditBackColor);
-    Configuration::requestingForeColor = lb.getValue("requesting_fore_color", Configuration::requestingForeColor);
-    Configuration::requestingBackColor = lb.getValue("requesting_back_color", Configuration::requestingBackColor);
-    Configuration::requestedForeColor = lb.getValue("responsed_fore_color", Configuration::requestedForeColor);
-    Configuration::requestedBackColor = lb.getValue("responsed_back_color", Configuration::requestedBackColor);
-    Configuration::correctingForeColor = lb.getValue("correcting_fore_color", Configuration::correctingForeColor);
-    Configuration::correctingBackColor = lb.getValue("correcting_back_color", Configuration::correctingBackColor);
-    Configuration::cloudCacheBackColor = lb.getValue("cloud_cache_back_color", Configuration::cloudCacheBackColor);
-    Configuration::cloudCacheForeColor = lb.getValue("cloud_cache_fore_color", Configuration::cloudCacheForeColor);
-    Configuration::localDbBackColor = lb.getValue("local_cache_back_color", Configuration::localDbBackColor);
-    Configuration::localDbForeColor = lb.getValue("local_cache_fore_color", Configuration::localDbForeColor);
-    Configuration::cloudCacheCandicateColor = lb.getValue("cloud_cache_candicate_color", Configuration::cloudCacheCandicateColor);
-    Configuration::cloudWordsCandicateColor = lb.getValue("cloud_word_candicate_color", Configuration::cloudWordsCandicateColor);
-    Configuration::databaseCandicateColor = lb.getValue("database_candicate_color", Configuration::databaseCandicateColor);
-    Configuration::internalCandicateColor = lb.getValue("internal_candicate_color", Configuration::internalCandicateColor);
-
-    // timeouts
-    Configuration::selectionTimout = (long long) lb.getValue("sel_timeout", (double) Configuration::selectionTimout / XUtility::MICROSECOND_PER_SECOND) * XUtility::MICROSECOND_PER_SECOND;
-    Configuration::preRequestTimeout = lb.getValue("pre_request_timeout", (double) Configuration::preRequestTimeout);
-    Configuration::requestTimeout = lb.getValue("request_timeout", (double) Configuration::requestTimeout);
-
-    // keys
-    Configuration::engModeKey.readFromLua(lb, "eng_mode_key");
-    Configuration::chsModeKey.readFromLua(lb, "chs_mode_key");
-    Configuration::startCorrectionKey.readFromLua(lb, "correction_mode_key");
-    Configuration::pageDownKey.readFromLua(lb, "page_down_key");
-    Configuration::pageUpKey.readFromLua(lb, "page_up_key");
-    Configuration::quickResponseKey.readFromLua(lb, "quick_response_key");
-
-    // int, tolerances
-    Configuration::fallbackEngTolerance = lb.getValue("auto_eng_tolerance", Configuration::fallbackEngTolerance);
-    Configuration::preRequestRetry = lb.getValue("pre_request_retry", Configuration::preRequestRetry);
-
-    // bools
-    Configuration::staticNotification = lb.getValue("static_notification", Configuration::staticNotification);
-    Configuration::useDoublePinyin = lb.getValue("use_double_pinyin", Configuration::useDoublePinyin);
-    Configuration::strictDoublePinyin = lb.getValue("strict_double_pinyin", Configuration::strictDoublePinyin);
-    Configuration::startInEngMode = lb.getValue("start_in_eng_mode", Configuration::startInEngMode);
-    Configuration::writeRequestCache = lb.getValue("cache_requests", Configuration::writeRequestCache);
-    Configuration::showNotification = lb.getValue("show_notificaion", Configuration::showNotification);
-    Configuration::preRequest = lb.getValue("pre_request", Configuration::preRequest);
-    Configuration::showCachedInPreedit = lb.getValue("show_cache_preedit", Configuration::showCachedInPreedit);
-    Configuration::fallbackUsingDb = lb.getValue("fallback_use_db", Configuration::fallbackUsingDb);
-    Configuration::useAlternativePopen = lb.getValue("strict_timeout", Configuration::useAlternativePopen);
-    Configuration::preRequestFallback = lb.getValue("fallback_pre_request", Configuration::preRequestFallback);
-    if (Configuration::preRequestFallback || Configuration::preRequest) Configuration::writeRequestCache = true;
-
-    // labels used in lookup table, ibus has 16 chars limition.
-    {
-        switch (lb.getValueType("label_keys")) {
-            case LUA_TSTRING:
-            {
-                Configuration::tableLabelKeys.clear();
-                string tableLabelKeys = lb.getValue("label_keys", "");
-                for (size_t i = 0; i < tableLabelKeys.length(); i++) {
-                    Configuration::tableLabelKeys.push_back(tableLabelKeys.c_str()[i]);
-                }
-                break;
-            }
-            case LUA_TTABLE:
-            {
-                Configuration::tableLabelKeys.clear();
-                char buffer[128];
-                for (size_t index = 1;; index++) {
-                    snprintf(buffer, sizeof (buffer), "%s..%u", "label_keys", index);
-                    // key is at index -2 and value is at index -1
-                    // key should be a string or a number
-                    Configuration::ImeKey key = IBUS_VoidSymbol;
-                    if (!key.readFromLua(lb, buffer)) break;
-                    else Configuration::tableLabelKeys.push_back(key);
-                }
-                break;
-            }
-        }
-    }
-
-    // external script path
-    Configuration::fetcherPath = string(lb.getValue("fetcher_path", Configuration::fetcherPath.c_str()));
-
-    // auto width punc and punc map
-    Configuration::autoWidthPunctuations = string(lb.getValue("punc_after_chinese", ".,?:"));
-
-    if (lb.getValueType("punc_map") == LUA_TTABLE) {
-        DEBUG_PRINT(4, "[LUABIND] read punc_map\n");
-        Configuration::punctuationMap.clear();
-        // IMPROVE: some lock here?
-        int pushedCount = lb.reachValue("punc_map");
-        for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
-            // key is at index -2 and value is at index -1
-            // key should be a string or a number
-
-            int key = 0;
-            switch (lua_type(L, -2)) {
-                case LUA_TNUMBER:
-                    key = lua_tointeger(L, -2);
-                    break;
-                case LUA_TSTRING:
-                    key = lua_tostring(L, -2)[0];
-                    break;
-                default:
-                    luaL_checktype(L, -2, LUA_TSTRING);
-            }
-
-            Configuration::FullPunctuation fpunc;
-            switch (lua_type(L, -1)) {
-                case LUA_TSTRING:
-                    // single punc
-                    DEBUG_PRINT(4, "[LUABIND] single punc: %s\n", lua_tostring(L, -1));
-                    fpunc.addPunctuation(lua_tostring(L, -1));
-                    break;
-                case LUA_TTABLE:
-                    // multi puncs
-                    DEBUG_PRINT(4, "[LUABIND] multi punc\n");
-                    for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
-                        // value should be string
-                        luaL_checktype(L, -1, LUA_TSTRING);
-                        DEBUG_PRINT(5, "[LUABIND]   punc: %s\n", lua_tostring(L, -1));
-                        fpunc.addPunctuation(lua_tostring(L, -1));
-                    }
-                    // after the loop, the key and value of inner table are all popped
-                    break;
-            }
-
-            Configuration::punctuationMap.setPunctuationPair(key, fpunc);
-        }
-        lua_pop(L, pushedCount);
-    }
-
-    return 0;
-}
-
-int LuaBinding::l_getPhraseDatabaseLoadedCount(lua_State* L) {
-    DEBUG_PRINT(3, "[LUABIND] l_getPhraseDatabaseLoadedCount\n");
-    lua_checkstack(L, 1);
-    lua_pushinteger(L, pinyinDatabases.size());
-    return 1;
-}
-
-int LuaBinding::l_loadPhraseDatabase(lua_State* L) {
-    DEBUG_PRINT(3, "[LUABIND] l_loadPhraseDatabase\n");
-    luaL_checktype(L, 1, LUA_TSTRING);
-    lua_checkstack(L, 1);
-
-    string dbPath = lua_tostring(L, 1);
-    double weight = 1;
-    int r = 0;
-
-    if (lua_type(L, 2) == LUA_TNUMBER) weight = lua_tonumber(L, 2);
-    if (pinyinDatabases.find(dbPath) == pinyinDatabases.end()) {
-        PinyinDatabase *pydb = new PinyinDatabase(dbPath, weight);
-        if (pydb->isDatabaseOpened()) {
-            r = 1;
-            pinyinDatabases.insert(pair<string, PinyinDatabase*>(dbPath, pydb));
-        } else delete pydb;
-    }
-
-    lua_pushinteger(L, r);
-    return 1;
-}
-
-int LuaBinding::l_setDebugLevel(lua_State *L) {
-    DEBUG_PRINT(3, "[LUABIND] l_setDebugLevel\n");
-    luaL_checktype(L, 1, LUA_TNUMBER);
-    globalDebugLevel = lua_tointeger(L, 1);
-    return 0;
 }
 
 int LuaBinding::l_printStack(lua_State *L) {
@@ -265,18 +57,6 @@ int LuaBinding::l_printStack(lua_State *L) {
     return 0;
 }
 
-int LuaBinding::l_keymask(lua_State *L) {
-    DEBUG_PRINT(3, "[LUABIND] l_keymask\n");
-    LuaBinding* lib = luaStates[L];
-    pthread_mutex_lock(&lib->luaStateAtomMutex);
-    luaL_checktype(L, 1, LUA_TNUMBER);
-    luaL_checktype(L, 2, LUA_TNUMBER);
-    lua_checkstack(L, 1);
-    lua_pushboolean(L, (lua_tointeger(L, 1) & lua_tointeger(L, 2)) == lua_tointeger(L, 2));
-    pthread_mutex_unlock(&lib->luaStateAtomMutex);
-    return 1;
-}
-
 int LuaBinding::l_bitand(lua_State *L) {
     DEBUG_PRINT(3, "[LUABIND] l_bitand\n");
     LuaBinding* lib = luaStates[L];
@@ -291,7 +71,7 @@ int LuaBinding::l_bitand(lua_State *L) {
 }
 
 int LuaBinding::l_bitxor(lua_State *L) {
-    DEBUG_PRINT(3, "[LUABIND] l_bitxor\n");
+    DEBUG_PRINT(3, "[LUA] l_bitxor\n");
     LuaBinding* lib = luaStates[L];
     pthread_mutex_lock(&lib->luaStateAtomMutex);
     luaL_checktype(L, 1, LUA_TNUMBER);
@@ -303,7 +83,7 @@ int LuaBinding::l_bitxor(lua_State *L) {
 }
 
 int LuaBinding::l_bitor(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_bitor\n");
+    DEBUG_PRINT(2, "[LUA] l_bitor\n");
     LuaBinding* lib = luaStates[L];
     pthread_mutex_lock(&lib->luaStateAtomMutex);
     luaL_checktype(L, 1, LUA_TNUMBER);
@@ -314,131 +94,37 @@ int LuaBinding::l_bitor(lua_State *L) {
     return 1;
 }
 
-int LuaBinding::l_isValidPinyin(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_isValidPinyin\n");
-    LuaBinding* lib = luaStates[L];
-    pthread_mutex_lock(&lib->luaStateAtomMutex);
-    luaL_checktype(L, 1, LUA_TSTRING);
-    lua_checkstack(L, 1);
-    lua_pushboolean(L, PinyinUtility::isValidPinyin(lua_tostring(L, 1)));
-    pthread_mutex_unlock(&lib->luaStateAtomMutex);
-    return 1;
-}
-
-int LuaBinding::l_charsToPinyin(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_charsToPinyin\n");
-    LuaBinding* lib = luaStates[L];
-    pthread_mutex_lock(&lib->luaStateAtomMutex);
-    luaL_checktype(L, 1, LUA_TSTRING);
-    lua_checkstack(L, 1);
-    lua_pushstring(L, PinyinUtility::charactersToPinyins(lua_tostring(L, 1), 0).c_str());
-    pthread_mutex_unlock(&lib->luaStateAtomMutex);
-    return 1;
-}
-
-/**
- * in: 1 string
- * out: 1 bool
- */
-int LuaBinding::l_isValidDoublePinyin(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_isValidDoublePinyin\n");
-    LuaBinding* lib = luaStates[L];
-    pthread_mutex_lock(&lib->luaStateAtomMutex);
-    luaL_checktype(L, 1, LUA_TSTRING);
-    lua_checkstack(L, 1);
-    lua_pushboolean(L, lib->doublePinyinScheme.isValidDoublePinyin(lua_tostring(L, 1)));
-    pthread_mutex_unlock(&lib->luaStateAtomMutex);
-    return 1;
-}
-
-int LuaBinding::l_doubleToFullPinyin(lua_State *L) {
-    DEBUG_PRINT(2, "[LUABIND] l_doubleToFullPinyin\n");
-    LuaBinding* lib = luaStates[L];
-    pthread_mutex_lock(&lib->luaStateAtomMutex);
-    luaL_checktype(L, 1, LUA_TSTRING);
-    lua_checkstack(L, 1);
-    lua_pushstring(L, lib->doublePinyinScheme.query(lua_tostring(L, 1)).c_str());
-    pthread_mutex_unlock(&lib->luaStateAtomMutex);
-    return 1;
-}
-
-int LuaBinding::l_setDoublePinyinScheme(lua_State *L) {
-    DEBUG_PRINT(1, "[LUABIND] setDoublePinyinScheme\n");
-    LuaBinding* lib = luaStates[L];
-    pthread_mutex_lock(&lib->luaStateAtomMutex);
-    luaL_checktype(L, 1, LUA_TTABLE);
-
-    lib->doublePinyinScheme.clear();
-
-    lua_checkstack(L, 5);
-    // traverse that table (at pos 1)
-    for (lua_pushnil(L); lua_next(L, 1) != 0; lua_pop(L, 1)) {
-        // key is at index -2 and value is at index -1
-        luaL_checktype(L, -1, LUA_TTABLE); // value is a table
-        luaL_checktype(L, -2, LUA_TSTRING); //key is a string
-
-        // key
-        char key = lua_tostring(L, -2)[0];
-
-        // expand value table, consonant
-        lua_pushnumber(L, 1); // push k
-        lua_gettable(L, -2); // t[k], t is at -2, k is at top
-        luaL_checktype(L, -1, LUA_TSTRING);
-
-        string consonant = lua_tostring(L, -1);
-        lua_pop(L, 1); // consonant not used, pop it
-
-        // vowels table
-        lua_pushnumber(L, 2); // push k
-        lua_gettable(L, -2); // t[k]
-        luaL_checktype(L, -1, LUA_TTABLE);
-        vector<string> vowels;
-        for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
-            luaL_checktype(L, -1, LUA_TSTRING);
-            vowels.push_back(lua_tostring(L, -1));
-        }
-        lua_pop(L, 1); // pop vowels table
-
-        lib->doublePinyinScheme.bindKey(key, consonant, vowels);
-    }
-    // return conflict count
-    lua_pushinteger(L, lib->doublePinyinScheme.buildMap());
-    pthread_mutex_unlock(&lib->luaStateAtomMutex);
-    return 1;
-}
-
 const struct luaL_Reg LuaBinding::luaLibraryReg[] = {
-    {"set_double_pinyin_scheme", LuaBinding::l_setDoublePinyinScheme},
-    {"double_to_full_pinyin", LuaBinding::l_doubleToFullPinyin},
-    {"is_valid_double_pinyin", LuaBinding::l_isValidDoublePinyin},
+    //{"set_double_pinyin_scheme", LuaBinding::l_setDoublePinyinScheme},
+    //{"double_to_full_pinyin", LuaBinding::l_doubleToFullPinyin},
+    //{"is_valid_double_pinyin", LuaBinding::l_isValidDoublePinyin},
     {"bitand", LuaBinding::l_bitand},
     //{"bitxor", LuaBinding::l_bitxor},
     {"bitor", LuaBinding::l_bitor},
     //{"keymask", LuaBinding::l_keymask},
     //{"printStack", LuaBinding::l_printStack},
-    {"chars_to_pinyin", LuaBinding::l_charsToPinyin},
-    {"set_debug_level", LuaBinding::l_setDebugLevel},
-    {"load_database", LuaBinding::l_loadPhraseDatabase},
-    {"database_count", LuaBinding::l_getPhraseDatabaseLoadedCount},
-    {"apply_settings", LuaBinding::l_applySettings},
-    {"get_selection", LuaBinding::l_getSelection},
-    {"notify", LuaBinding::l_notify},
+    //{"chars_to_pinyin", LuaBinding::l_charsToPinyin},
+    //{"set_debug_level", LuaBinding::l_setDebugLevel},
+    //{"load_database", LuaBinding::l_loadPhraseDatabase},
+    //{"database_count", LuaBinding::l_getPhraseDatabaseLoadedCount},
+    //{"apply_settings", LuaBinding::l_applySettings},
+    //{"get_selection", LuaBinding::l_getSelection},
+    //{"notify", LuaBinding::l_notify},
     {"execute", LuaBinding::l_executeScript},
-    {"commit", Engine::l_commitText},
-    {"request", Engine::l_sendRequest},
-    {"register_command", Configuration::l_registerCommand},
+    //{"commit", Engine::l_commitText},
+    //{"request", Engine::l_sendRequest},
+    //{"register_command", Configuration::l_registerCommand},
     {NULL, NULL}
 };
 
 // LuaBinding class
 
 map<const lua_State*, LuaBinding*> LuaBinding::luaStates;
-DoublePinyinScheme LuaBinding::doublePinyinScheme;
 
-const char LuaBinding::LIB_NAME[] = "ime";
+const char LuaBinding::LIB_NAME[] = IME_LIBRARY_NAME;
 const string LuaBinding::LibraryName = LuaBinding::LIB_NAME;
 
-map<string, PinyinDatabase*> LuaBinding::pinyinDatabases;
+
 
 LuaBinding::LuaBinding() {
     DEBUG_PRINT(1, "[LUABIND] Init\n");
@@ -485,20 +171,11 @@ void LuaBinding::staticInit() {
 }
 
 void LuaBinding::loadStaticConfigure() {
-    staticLuaBinding->doString("dofile('" PKGDATADIR G_DIR_SEPARATOR_S "config.lua')");
-
-    l_applySettings(staticLuaBinding->L);
+    staticLuaBinding->doString("dofile('" PKGDATADIR G_DIR_SEPARATOR_S "config.lua') " IME_LIBRARY_NAME ".apply_settings()");
 }
 
 void LuaBinding::staticDestruct() {
     DEBUG_PRINT(1, "[LUABIND] Static Destroy\n");
-    // close dbs
-    for (map<string, PinyinDatabase*>::iterator it = pinyinDatabases.begin(); it != pinyinDatabases.end(); ++it) {
-        if (it->second) {
-            delete it->second;
-            it->second = NULL;
-        }
-    }
     delete staticLuaBinding;
 }
 
@@ -611,7 +288,7 @@ aborting:
     return ret;
 }
 
-void LuaBinding::addFunction(const lua_CFunction func, const char * funcName) {
+void LuaBinding::registerFunction(const lua_CFunction func, const char * funcName) {
     DEBUG_PRINT(1, "[LUABIND] addFunction: %s\n", funcName);
 
     pthread_mutex_lock(&luaStateAtomMutex);
@@ -622,6 +299,17 @@ void LuaBinding::addFunction(const lua_CFunction func, const char * funcName) {
     lua_settable(L, -3); // will pop key and value
     lua_pop(L, 1); // stack should be empty.
     pthread_mutex_unlock(&luaStateAtomMutex);
+}
+
+static vector<string> splitString(string toBeSplited, char separator) {
+    vector<string> r;
+    size_t lastPos = 0;
+    for (size_t pos = toBeSplited.find(separator);; pos = toBeSplited.find(separator, pos + 1)) {
+        r.push_back(toBeSplited.substr(lastPos, pos - lastPos));
+        if (pos == string::npos) break;
+        lastPos = pos + 1;
+    }
+    return r;
 }
 
 int LuaBinding::reachValue(const char* varName, const char* libName) {
@@ -790,3 +478,8 @@ LuaBinding& LuaBinding::getLuaBinding(lua_State* L) {
     if (luaStates.find(L) == luaStates.end()) return getStaticBinding();
     return *luaStates.find(L)->second;
 }
+
+pthread_mutex_t* LuaBinding::getAtomMutex() {
+    return &luaStateAtomMutex;
+}
+

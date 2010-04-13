@@ -21,6 +21,11 @@
 #include "LuaBinding.h"
 #include "XUtility.h"
 #include "Configuration.h"
+#include "PinyinSequence.h"
+#include "PinyinCloudClient.h"
+#include "PinyinUtility.h"
+#include "PinyinDatabase.h"
+#include "DoublePinyinScheme.h"
 
 typedef struct _IBusSgpyccEngine IBusSgpyccEngine;
 typedef struct _IBusSgpyccEngineClass IBusSgpyccEngineClass;
@@ -64,7 +69,7 @@ struct _IBusSgpyccEngine {
     // mainly internally used by processKeyEvent
     gboolean lastProcessKeyResult;
     guint32 lastKeyval;
-    pthread_mutex_t engineMutex, commitMutex;
+    pthread_mutex_t processKeyMutex, commitMutex, updatePreeditMutex;
     bool lastInputIsChinese;
     int preRequestRetry;
 
@@ -97,10 +102,6 @@ static int totalRequestCount = 0;
 static int totalFailedRequestCount = 0;
 static double totalResponseTime = .0;
 static double maximumResponseTime = .0;
-
-// lock defines
-#define ENGINE_MUTEX_LOCK if (pthread_mutex_lock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex lock fail.\n"), exit(EXIT_FAILURE);
-#define ENGINE_MUTEX_UNLOCK if (pthread_mutex_unlock(&engine->engineMutex)) fprintf(stderr, "[FATAL] mutex unlock fail.\n"), exit(EXIT_FAILURE);
 
 // init funcs
 static void engineClassInit(IBusSgpyccEngineClass *klass);
@@ -217,8 +218,9 @@ static void engineInit(IBusSgpyccEngine *engine) {
     pthread_mutexattr_init(&engineMutexAttr);
     pthread_mutexattr_settype(&engineMutexAttr, PTHREAD_MUTEX_ERRORCHECK);
 
-    if (pthread_mutex_init(&engine->engineMutex, &engineMutexAttr)
-            || pthread_mutex_init(&engine->commitMutex, &engineMutexAttr)) {
+    if (pthread_mutex_init(&engine->processKeyMutex, &engineMutexAttr)
+            || pthread_mutex_init(&engine->commitMutex, &engineMutexAttr)
+            || pthread_mutex_init(&engine->updatePreeditMutex, &engineMutexAttr)) {
         fprintf(stderr, "can't create engine mutex.\nprogram aborted.");
         exit(EXIT_FAILURE);
     }
@@ -281,7 +283,7 @@ static void engineInit(IBusSgpyccEngine *engine) {
     // properties
     engine->propList = ibus_prop_list_new();
 
-    engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, ibus_text_new_from_static_string("中英文模式切换"), TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
+    engine->engModeProp = ibus_property_new("engModeIndicator", PROP_TYPE_NORMAL, NULL, NULL, ibus_text_new_from_static_string("中英文状态切换"), TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     engine->requestingProp = ibus_property_new("requestingIndicator", PROP_TYPE_NORMAL, NULL, NULL, ibus_text_new_from_static_string("云服务器请求状态"), TRUE, TRUE, PROP_STATE_INCONSISTENT, NULL);
     engine->extensionMenuProp = ibus_property_new("extensionMenu", PROP_TYPE_MENU, NULL, PKGDATADIR "/icons/extensions.png", ibus_text_new_from_static_string("用户扩展"), TRUE, TRUE, PROP_STATE_INCONSISTENT, Configuration::extensionList);
 
@@ -303,8 +305,9 @@ static void engineInit(IBusSgpyccEngine *engine) {
 static void engineDestroy(IBusSgpyccEngine *engine) {
 #define DELETE_G_OBJECT(x) if(x != NULL) g_object_unref(x), x = NULL;
     DEBUG_PRINT(1, "[ENGINE] Destroy\n");
-    pthread_mutex_destroy(&engine->engineMutex);
+    pthread_mutex_destroy(&engine->processKeyMutex);
     pthread_mutex_destroy(&engine->commitMutex);
+    pthread_mutex_destroy(&engine->updatePreeditMutex);
 
     // delete strings
     delete engine->cloudClient;
@@ -354,14 +357,14 @@ inline static void engineClearLookupTable(IBusSgpyccEngine *engine) {
 static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, guint32 keycode, guint32 state) {
     DEBUG_PRINT(1, "[ENGINE] ProcessKeyEvent(%d, %d, 0x%x)\n", keyval, keycode, state);
 
-#define CONSIDER_MASKS (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_MOD4_MASK | IBUS_MOD5_MASK | IBUS_SUPER_MASK | IBUS_HYPER_MASK | IBUS_RELEASE_MASK | IBUS_META_MASK)
+#define USING_MASKS (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_MOD4_MASK | IBUS_MOD5_MASK | IBUS_SUPER_MASK | IBUS_HYPER_MASK | IBUS_RELEASE_MASK | IBUS_META_MASK)
     // check extension hot key first
-    if (((state & IBUS_RELEASE_MASK) == 0) && Configuration::activeExtension(keyval, state & CONSIDER_MASKS)) {
+    if (((state & IBUS_RELEASE_MASK) == 0) && Configuration::activeExtension(keyval, state & USING_MASKS)) {
         engine->lastKeyval = IBUS_VoidSymbol, engine->lastProcessKeyResult = TRUE;
         return TRUE;
     }
 
-    ENGINE_MUTEX_LOCK;
+    pthread_mutex_lock(&engine->processKeyMutex);
     gboolean res = FALSE;
 engineProcessKeyEventStart:
 
@@ -545,7 +548,7 @@ engineProcessKeyEventStart:
                         // external db
                         CandidateList cl;
                         string characters = engine->correctings->toString();
-                        for (map<string, PinyinDatabase*>::iterator it = LuaBinding::pinyinDatabases.begin(); it != LuaBinding::pinyinDatabases.end(); ++it) {
+                        for (map<string, PinyinDatabase*>::const_iterator it = PinyinDatabase::getPinyinDatabases().begin(); it != PinyinDatabase::getPinyinDatabases().end(); ++it) {
                             for (size_t i = 0;; i++) {
                                 string pinyins = PinyinUtility::charactersToPinyins(characters, i, false);
                                 if (pinyins.empty()) break;
@@ -594,7 +597,7 @@ engineProcessKeyEventStart:
 
         while (res == FALSE) { // use while here to make 'break' available, orig use (if)
             // ignore some masks (Issue 8, Comment #11)
-            state = state & CONSIDER_MASKS;
+            state = state & USING_MASKS;
 
             // check force comit all key
             engine->cloudClient->readLock();
@@ -736,8 +739,8 @@ engineProcessKeyEventStart:
                     // double pinyin may use ';' while full pinyin may use '\''
                     // may falback to eng or full pinyin here
                     if (Configuration::useDoublePinyin) {
-                        if (LuaBinding::doublePinyinScheme.isKeyBinded(keychr)) {
-                            if (LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit + keychr)) {
+                        if (DoublePinyinScheme::getDefaultDoublePinyinScheme().isKeyBinded(keychr)) {
+                            if (DoublePinyinScheme::getDefaultDoublePinyinScheme().isValidDoublePinyin(*engine->preedit + keychr)) {
                                 *engine->preedit += keychr;
                                 engine->lastInputIsChinese = true;
                                 handled = true;
@@ -751,7 +754,6 @@ engineProcessKeyEventStart:
 
                     if (fallbackToFullPinyin || !Configuration::useDoublePinyin) {
                         if ((keyval >= IBUS_a && keyval <= IBUS_z) || (keyval == '\'' && engine->preedit->length() > 0)) {
-                            //if (keyval == '\'') keychr = ' ';
                             *engine->preedit += keychr;
                             engine->lastInputIsChinese = true;
                             handled = true;
@@ -793,14 +795,14 @@ engineProcessKeyEventStart:
                 }
 
                 // update active preedit
-                if (!LuaBinding::doublePinyinScheme.isValidDoublePinyin(*engine->preedit)) fallbackToFullPinyin = true;
+                if (!DoublePinyinScheme::getDefaultDoublePinyinScheme().isValidDoublePinyin(*engine->preedit)) fallbackToFullPinyin = true;
                 if (fallbackToEng) {
                     engine->engMode = true;
                     engineUpdateProperties(engine);
                     engine->cloudClient->request(*engine->preedit, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
                     *engine->activePreedit = "";
                 } else if (Configuration::useDoublePinyin && fallbackToFullPinyin == false) {
-                    *engine->activePreedit = LuaBinding::doublePinyinScheme.query(*engine->preedit);
+                    *engine->activePreedit = DoublePinyinScheme::getDefaultDoublePinyinScheme().query(*engine->preedit);
                 } else {
                     *engine->activePreedit = PinyinUtility::separatePinyins(*engine->preedit);
                 }
@@ -847,7 +849,7 @@ engineProcessKeyEventStart:
             break;
         } // while (res == 0)
     }
-    ENGINE_MUTEX_UNLOCK;
+    pthread_mutex_unlock(&engine->processKeyMutex);
 
     // update preedit
     if (res) engineUpdatePreedit(engine);
@@ -984,7 +986,6 @@ static void enginePageDown(IBusSgpyccEngine * engine) {
 static void engineCursorUp(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] CursorUp\n");
     if (!engine->correctings->empty()) {
-
         ibus_lookup_table_cursor_up(engine->table);
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -993,7 +994,6 @@ static void engineCursorUp(IBusSgpyccEngine * engine) {
 static void engineCursorDown(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] CursorDown\n");
     if (!engine->correctings->empty()) {
-
         ibus_lookup_table_cursor_down(engine->table);
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
     }
@@ -1061,7 +1061,7 @@ static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const strin
 static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string& pinyins) {
     string remainingPinyins, partialConvertedCharacters;
     partialConvertedCharacters = getPartialCacheConvert(engine, pinyins, &remainingPinyins);
-    return LuaBinding::pinyinDatabases.begin()->second->
+    return PinyinDatabase::getPinyinDatabases().begin()->second->
             greedyConvert(pinyins, Configuration::dbCompleteLongPhraseAdjust);
 }
 
@@ -1079,7 +1079,7 @@ static const vector<string> queryCloudMemoryDatabase(const string& pinyins) {
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     // this function need a mutex lock, it will pop first several finished requests from cloudClient
     DEBUG_PRINT(1, "[ENGINE] Update Preedit\n");
-    ENGINE_MUTEX_LOCK;
+    pthread_mutex_lock(&engine->updatePreeditMutex);
 
     engine->cloudClient->readLock();
     size_t requestCount = engine->cloudClient->getRequestCount();
@@ -1224,7 +1224,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
         engineUpdateProperties(engine);
     }
 
-    ENGINE_MUTEX_UNLOCK;
+    pthread_mutex_unlock(&engine->updatePreeditMutex);
 }
 
 // request cache read and write
@@ -1476,7 +1476,7 @@ string externalFetcher(void* data, const string & requestString) {
             // empty, means fails
             totalFailedRequestCount++;
             // try local db, no lock here because db is not allowed to unload currently
-            if (Configuration::fallbackUsingDb && LuaBinding::pinyinDatabases.size() > 0) {
+            if (Configuration::fallbackUsingDb && PinyinDatabase::getPinyinDatabases().size() > 0) {
                 res = getGreedyLocalCovert(engine, requestString);
             } else {
                 // try partial convert
@@ -1576,37 +1576,44 @@ static string luaFetcher(void* voidData, const string & requestString) {
     return response;
 }
 
-int Engine::l_commitText(lua_State * L) {
-    lua_tostring(L, 1);
-    DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
-    luaL_checkstring(L, 1);
-    IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
-    if (!engine || !engine->enabled) return 0;
+namespace ImeEngine {
+    static int l_commitText(lua_State * L) {
+        lua_tostring(L, 1);
+        DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));
+        luaL_checkstring(L, 1);
+        IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
+        if (!engine || !engine->enabled) return 0;
 
-    engine->cloudClient->request(string(lua_tostring(L, 1)), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-    engine->lastInputIsChinese = false;
+        engine->cloudClient->request(string(lua_tostring(L, 1)), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        engine->lastInputIsChinese = false;
 
-    return 0; // return 0 value to lua code
-}
-
-int Engine::l_sendRequest(lua_State * L) {
-    luaL_checkstring(L, 1);
-    DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
-    IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
-    if (!engine || !engine->enabled) return 0;
-
-    engine->requesting = true;
-    if (lua_type(L, 2) == LUA_TSTRING) {
-        LuaFuncData *data = new LuaFuncData();
-        data->luaFuncName = lua_tostring(L, 2);
-        data->engine = engine;
-        engine->cloudClient->request(string(lua_tostring(L, 1)), luaFetcher, (void*) data, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-    } else {
-        engine->cloudClient->request(string(lua_tostring(L, 1)), externalFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        return 0; // return 0 value to lua code
     }
 
-    // delete selection
-    engineCommitText(engine);
+    static int l_sendRequest(lua_State * L) {
+        luaL_checkstring(L, 1);
+        DEBUG_PRINT(1, "[ENGINE] l_sendRequest: %s\n", lua_tostring(L, 1));
+        IBusSgpyccEngine* engine = (IBusSgpyccEngine*) Configuration::activeEngine;
+        if (!engine || !engine->enabled) return 0;
 
-    return 0; // return 0 value to lua code
+        engine->requesting = true;
+        if (lua_type(L, 2) == LUA_TSTRING) {
+            LuaFuncData *data = new LuaFuncData();
+            data->luaFuncName = lua_tostring(L, 2);
+            data->engine = engine;
+            engine->cloudClient->request(string(lua_tostring(L, 1)), luaFetcher, (void*) data, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        } else {
+            engine->cloudClient->request(string(lua_tostring(L, 1)), externalFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        }
+
+        // delete selection
+        engineCommitText(engine);
+
+        return 0; // return 0 value to lua code
+    }
+
+    void registerLuaFunctions() {
+        LuaBinding::getStaticBinding().registerFunction(l_commitText, "commit");
+        LuaBinding::getStaticBinding().registerFunction(l_sendRequest, "request");
+    }
 }

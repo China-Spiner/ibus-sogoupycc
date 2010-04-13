@@ -12,6 +12,8 @@
 #include <vector>
 #include <map>
 
+#include "LuaBinding.h"
+
 using std::string;
 using std::vector;
 using std::map;
@@ -23,19 +25,30 @@ public:
     DoublePinyinScheme(const DoublePinyinScheme& orig);
 
     void bindKey(const char key, const string& consonant, const vector<string>& vowels);
+
     void clear();
-    const int buildMap();
-    const string query(const char firstChar, const char secondChar);
-    const string query(const string& doublePinyinString);
-    const bool isValidDoublePinyin(const string& doublePinyinString);
-    const bool isKeyBinded(const char key);
+    const int buildMap() const;
+    const string query(const char firstChar, const char secondChar) const;
+    const string query(const string& doublePinyinString) const;
+    const bool isValidDoublePinyin(const string& doublePinyinString) const;
+    const bool isKeyBinded(const char key) const;
 
     virtual ~DoublePinyinScheme();
 
+    static void registerLuaFunctions();
+    static const DoublePinyinScheme getDefaultDoublePinyinScheme();
+    
 private:
-    bool mapBuilt;
+    mutable bool mapBuilt;
     map<char, pair<string, vector<string> > > bindedKeys;
-    map<pair<char, char>, string> queryMap;
+    mutable map<pair<char, char>, string> queryMap;
+
+    // Lua C Functions
+
+    static int l_setDoublePinyinScheme(lua_State *L);
+    static int l_isValidDoublePinyin(lua_State *L);
+    static int l_doubleToFullPinyin(lua_State *L);
+    static DoublePinyinScheme defaultDoublePinyinScheme;
 };
 
 #endif	/* _DOUBLEPINYINSCHEME_H */

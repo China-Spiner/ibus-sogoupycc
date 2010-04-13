@@ -44,7 +44,8 @@ namespace Configuration {
             chsModeKey = IBUS_Shift_L,
             pageDownKey = 'h',
             pageUpKey = 'g',
-            quickResponseKey = IBUS_Alt_R;
+            quickResponseKey = IBUS_Alt_R,
+            submitRawKey = IBUS_Shift_R;
 
     // boolean configs
     bool useDoublePinyin = false;
@@ -251,29 +252,29 @@ namespace Configuration {
     void staticInit() {
         DEBUG_PRINT(3, "[CONF] staticInit\n");
         // init complex structs, such as punctuations
-        Configuration::punctuationMap.setPunctuationPair('.', FullPunctuation("。"));
-        Configuration::punctuationMap.setPunctuationPair(',', FullPunctuation("，"));
-        Configuration::punctuationMap.setPunctuationPair('^', FullPunctuation("……"));
-        Configuration::punctuationMap.setPunctuationPair('@', FullPunctuation("·"));
-        Configuration::punctuationMap.setPunctuationPair('!', FullPunctuation("！"));
-        Configuration::punctuationMap.setPunctuationPair('~', FullPunctuation("～"));
-        Configuration::punctuationMap.setPunctuationPair('?', FullPunctuation("？"));
-        Configuration::punctuationMap.setPunctuationPair('#', FullPunctuation("＃"));
-        Configuration::punctuationMap.setPunctuationPair('$', FullPunctuation("￥"));
-        Configuration::punctuationMap.setPunctuationPair('&', FullPunctuation("＆"));
-        Configuration::punctuationMap.setPunctuationPair('(', FullPunctuation("（"));
-        Configuration::punctuationMap.setPunctuationPair(')', FullPunctuation("）"));
-        Configuration::punctuationMap.setPunctuationPair('{', FullPunctuation("｛"));
-        Configuration::punctuationMap.setPunctuationPair('}', FullPunctuation("｝"));
-        Configuration::punctuationMap.setPunctuationPair(']', FullPunctuation("［"));
-        Configuration::punctuationMap.setPunctuationPair(']', FullPunctuation("］"));
-        Configuration::punctuationMap.setPunctuationPair(';', FullPunctuation("；"));
-        Configuration::punctuationMap.setPunctuationPair(':', FullPunctuation("："));
-        Configuration::punctuationMap.setPunctuationPair('<', FullPunctuation("《"));
-        Configuration::punctuationMap.setPunctuationPair('>', FullPunctuation("》"));
-        Configuration::punctuationMap.setPunctuationPair('\\', FullPunctuation("、"));
-        Configuration::punctuationMap.setPunctuationPair('\'', FullPunctuation(2, "‘", "’"));
-        Configuration::punctuationMap.setPunctuationPair('\"', FullPunctuation(2, "“", "”"));
+        punctuationMap.setPunctuationPair('.', FullPunctuation("。"));
+        punctuationMap.setPunctuationPair(',', FullPunctuation("，"));
+        punctuationMap.setPunctuationPair('^', FullPunctuation("……"));
+        punctuationMap.setPunctuationPair('@', FullPunctuation("·"));
+        punctuationMap.setPunctuationPair('!', FullPunctuation("！"));
+        punctuationMap.setPunctuationPair('~', FullPunctuation("～"));
+        punctuationMap.setPunctuationPair('?', FullPunctuation("？"));
+        punctuationMap.setPunctuationPair('#', FullPunctuation("＃"));
+        punctuationMap.setPunctuationPair('$', FullPunctuation("￥"));
+        punctuationMap.setPunctuationPair('&', FullPunctuation("＆"));
+        punctuationMap.setPunctuationPair('(', FullPunctuation("（"));
+        punctuationMap.setPunctuationPair(')', FullPunctuation("）"));
+        punctuationMap.setPunctuationPair('{', FullPunctuation("｛"));
+        punctuationMap.setPunctuationPair('}', FullPunctuation("｝"));
+        punctuationMap.setPunctuationPair(']', FullPunctuation("［"));
+        punctuationMap.setPunctuationPair(']', FullPunctuation("］"));
+        punctuationMap.setPunctuationPair(';', FullPunctuation("；"));
+        punctuationMap.setPunctuationPair(':', FullPunctuation("："));
+        punctuationMap.setPunctuationPair('<', FullPunctuation("《"));
+        punctuationMap.setPunctuationPair('>', FullPunctuation("》"));
+        punctuationMap.setPunctuationPair('\\', FullPunctuation("、"));
+        punctuationMap.setPunctuationPair('\'', FullPunctuation(2, "‘", "’"));
+        punctuationMap.setPunctuationPair('\"', FullPunctuation(2, "“", "”"));
 
         // tableLabelKeys = "jkl;uiopasdf";
         tableLabelKeys.push_back('j');
@@ -329,9 +330,6 @@ namespace Configuration {
         luaBinding.setValue("None", IBUS_VoidSymbol, "key");
         // other constants
         luaBinding.setValue("COLOR_NOCHANGE", INVALID_COLOR);
-
-        // moved to LuaBinding static C function register array
-        // luaBinding.addFunction(l_registerCommand, "register_command");
     }
 
     void staticDestruct() {
@@ -364,14 +362,14 @@ namespace Configuration {
     }
 
     const string getFullPinyinTailAdjusted(const string& fullPinyinString) {
-        for (size_t i = 0; i < fullPinyinString.length(); i++){
+        for (size_t i = 0; i < fullPinyinString.length(); i++) {
             string s = LuaBinding::getStaticBinding().getValue((string("full_pinyin_adjustments.") + fullPinyinString.substr(i)).c_str(), "");
             if (!s.empty())
                 return (fullPinyinString.substr(0, i) + s);
         }
         return fullPinyinString;
     }
-    
+
     const string getGlobalCache(const string& requestString, const bool includeWeak) {
         string content = LuaBinding::getStaticBinding().getValue(requestString.c_str(), "", "request_cache");
         if (content.substr(0, sizeof (WEAK_CACHE_PREFIX) - 1) == string(WEAK_CACHE_PREFIX)) {
@@ -391,6 +389,11 @@ namespace Configuration {
         }
     }
 
+    /**
+     * register extension functions
+     * in: int, int, string, string (key, modifiers, label, script)
+     * out: -
+     */
     int l_registerCommand(lua_State *L) {
         DEBUG_PRINT(3, "[CONF] l_registerCommand\n");
         luaL_checktype(L, 1, LUA_TNUMBER);
@@ -399,20 +402,179 @@ namespace Configuration {
         luaL_checktype(L, 4, LUA_TSTRING);
 
         // Extension::Extension(ImeKey key, unsigned int keymask, string script, string label)
-        Configuration::ImeKey key = lua_tointeger(L, 1);
+        ImeKey key = lua_tointeger(L, 1);
         unsigned int modifiers = lua_tointeger(L, 2);
         string label = lua_tostring(L, 3);
         string script = lua_tostring(L, 4);
         // find existed same name Extension and delete it first
-        for (vector<Configuration::Extension*>::iterator it = Configuration::extensions.begin(); it != Configuration::extensions.end(); ++it) {
+        for (vector<Extension*>::iterator it = extensions.begin(); it != extensions.end(); ++it) {
             if ((*it)->getLabel() == label) {
                 // modify label
                 label = label + " (改)";
                 break;
             }
         }
-        Configuration::extensions.push_back(new Configuration::Extension(key, modifiers, label, script));
+        extensions.push_back(new Extension(key, modifiers, label, script));
         return 0;
     }
+
+    /**
+     * apply global settings immediately
+     * in: -
+     * out: -
+     */
+    static int l_applySettings(lua_State* L) {
+        DEBUG_PRINT(3, "[CONF] l_applySettings\n");
+        LuaBinding& lb = LuaBinding::getLuaBinding(L);
+
+        // multi-tone chinese lookup result limit
+        multiToneLimit = lb.getValue("multi_tone_limit", multiToneLimit);
+
+        // database confs
+        dbResultLimit = lb.getValue("db_result_limit", dbResultLimit);
+        dbLengthLimit = lb.getValue("db_length_limit", dbLengthLimit);
+        dbLongPhraseAdjust = lb.getValue("db_phrase_adjust", dbLongPhraseAdjust);
+        dbCompleteLongPhraseAdjust = lb.getValue("db_completion_adjust", dbCompleteLongPhraseAdjust);
+        dbOrder = string(lb.getValue("db_query_order", dbOrder.c_str()));
+
+        // colors (-1: use default)
+        preeditForeColor = lb.getValue("preedit_fore_color", preeditForeColor);
+        preeditBackColor = lb.getValue("preedit_back_color", preeditBackColor);
+        requestingForeColor = lb.getValue("requesting_fore_color", requestingForeColor);
+        requestingBackColor = lb.getValue("requesting_back_color", requestingBackColor);
+        requestedForeColor = lb.getValue("responsed_fore_color", requestedForeColor);
+        requestedBackColor = lb.getValue("responsed_back_color", requestedBackColor);
+        correctingForeColor = lb.getValue("correcting_fore_color", correctingForeColor);
+        correctingBackColor = lb.getValue("correcting_back_color", correctingBackColor);
+        cloudCacheBackColor = lb.getValue("cloud_cache_back_color", cloudCacheBackColor);
+        cloudCacheForeColor = lb.getValue("cloud_cache_fore_color", cloudCacheForeColor);
+        localDbBackColor = lb.getValue("local_cache_back_color", localDbBackColor);
+        localDbForeColor = lb.getValue("local_cache_fore_color", localDbForeColor);
+        cloudCacheCandicateColor = lb.getValue("cloud_cache_candicate_color", cloudCacheCandicateColor);
+        cloudWordsCandicateColor = lb.getValue("cloud_word_candicate_color", cloudWordsCandicateColor);
+        databaseCandicateColor = lb.getValue("database_candicate_color", databaseCandicateColor);
+        internalCandicateColor = lb.getValue("internal_candicate_color", internalCandicateColor);
+
+        // timeouts
+        selectionTimout = (long long) lb.getValue("sel_timeout", (double) selectionTimout / XUtility::MICROSECOND_PER_SECOND) * XUtility::MICROSECOND_PER_SECOND;
+        preRequestTimeout = lb.getValue("pre_request_timeout", (double) preRequestTimeout);
+        requestTimeout = lb.getValue("request_timeout", (double) requestTimeout);
+
+        // keys
+        engModeKey.readFromLua(lb, "eng_mode_key");
+        chsModeKey.readFromLua(lb, "chs_mode_key");
+        startCorrectionKey.readFromLua(lb, "correction_mode_key");
+        pageDownKey.readFromLua(lb, "page_down_key");
+        pageUpKey.readFromLua(lb, "page_up_key");
+        quickResponseKey.readFromLua(lb, "quick_response_key");
+
+        // int, tolerances
+        fallbackEngTolerance = lb.getValue("auto_eng_tolerance", fallbackEngTolerance);
+        preRequestRetry = lb.getValue("pre_request_retry", preRequestRetry);
+
+        // bools
+        staticNotification = lb.getValue("static_notification", staticNotification);
+        useDoublePinyin = lb.getValue("use_double_pinyin", useDoublePinyin);
+        strictDoublePinyin = lb.getValue("strict_double_pinyin", strictDoublePinyin);
+        startInEngMode = lb.getValue("start_in_eng_mode", startInEngMode);
+        writeRequestCache = lb.getValue("cache_requests", writeRequestCache);
+        showNotification = lb.getValue("show_notificaion", showNotification);
+        preRequest = lb.getValue("pre_request", preRequest);
+        showCachedInPreedit = lb.getValue("show_cache_preedit", showCachedInPreedit);
+        fallbackUsingDb = lb.getValue("fallback_use_db", fallbackUsingDb);
+        useAlternativePopen = lb.getValue("strict_timeout", useAlternativePopen);
+        preRequestFallback = lb.getValue("fallback_pre_request", preRequestFallback);
+        if (preRequestFallback || preRequest) writeRequestCache = true;
+
+        // labels used in lookup table, ibus has 16 chars limition.
+        {
+            switch (lb.getValueType("label_keys")) {
+                case LUA_TSTRING:
+                {
+                    tableLabelKeys.clear();
+                    string tableLabelKeys = lb.getValue("label_keys", "");
+                    for (size_t i = 0; i < tableLabelKeys.length(); i++) {
+                        tableLabelKeys.push_back(tableLabelKeys.c_str()[i]);
+                    }
+                    break;
+                }
+                case LUA_TTABLE:
+                {
+                    tableLabelKeys.clear();
+                    char buffer[128];
+                    for (size_t index = 1;; index++) {
+                        snprintf(buffer, sizeof (buffer), "%s..%u", "label_keys", index);
+                        // key is at index -2 and value is at index -1
+                        // key should be a string or a number
+                        ImeKey key = IBUS_VoidSymbol;
+                        if (!key.readFromLua(lb, buffer)) break;
+                        else tableLabelKeys.push_back(key);
+                    }
+                    break;
+                }
+            }
+        }
+
+        // external script path
+        fetcherPath = string(lb.getValue("fetcher_path", fetcherPath.c_str()));
+
+        // auto width punc and punc map
+        autoWidthPunctuations = string(lb.getValue("punc_after_chinese", ".,?:"));
+
+        if (lb.getValueType("punc_map") == LUA_TTABLE) {
+            DEBUG_PRINT(4, "[LUABIND] read punc_map\n");
+            punctuationMap.clear();
+            // IMPROVE: some lock here?
+            int pushedCount = lb.reachValue("punc_map");
+            for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
+                // key is at index -2 and value is at index -1
+                // key should be a string or a number
+
+                int key = 0;
+                switch (lua_type(L, -2)) {
+                    case LUA_TNUMBER:
+                        key = lua_tointeger(L, -2);
+                        break;
+                    case LUA_TSTRING:
+                        key = lua_tostring(L, -2)[0];
+                        break;
+                    default:
+                        luaL_checktype(L, -2, LUA_TSTRING);
+                }
+
+                FullPunctuation fpunc;
+                switch (lua_type(L, -1)) {
+                    case LUA_TSTRING:
+                        // single punc
+                        DEBUG_PRINT(4, "[LUABIND] single punc: %s\n", lua_tostring(L, -1));
+                        fpunc.addPunctuation(lua_tostring(L, -1));
+                        break;
+                    case LUA_TTABLE:
+                        // multi puncs
+                        DEBUG_PRINT(4, "[LUABIND] multi punc\n");
+                        for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
+                            // value should be string
+                            luaL_checktype(L, -1, LUA_TSTRING);
+                            DEBUG_PRINT(5, "[LUABIND]   punc: %s\n", lua_tostring(L, -1));
+                            fpunc.addPunctuation(lua_tostring(L, -1));
+                        }
+                        // after the loop, the key and value of inner table are all popped
+                        break;
+                }
+
+                punctuationMap.setPunctuationPair(key, fpunc);
+            }
+            lua_pop(L, pushedCount);
+        }
+
+        return 0;
+    }
+
+    void registerLuaFunctions() {
+        // register lua C function
+        LuaBinding::getStaticBinding().registerFunction(l_registerCommand, "register_command");
+        LuaBinding::getStaticBinding().registerFunction(l_applySettings, "apply_settings");
+    }
+
 };
 

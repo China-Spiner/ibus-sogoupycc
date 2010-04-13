@@ -276,9 +276,9 @@ vector<string> PinyinCloudClient::queryMemoryDatabase(const string& pinyins) {
     DEBUG_PRINT(3, "[CLOUD] queryMemoryDatabase: '%s'\n", pinyins.c_str());
     vector<string> r;
     pthread_rwlock_rdlock(&cloudMemoryDatabaseLock);
-    pair< multimap<string, string>::iterator, multimap<string, string>::iterator> range
+    pair< multimap<string, string>::const_iterator, multimap<string, string>::const_iterator> range
             = cloudMemoryDatabase.equal_range(pinyins);
-    for (multimap<string, string>::iterator it = range.first; it != range.second; ++it) {
+    for (multimap<string, string>::const_iterator it = range.first; it != range.second; ++it) {
         DEBUG_PRINT(5, "[CLOUD] queryMemoryDatabase: => '%s'\n", it->second.c_str());
         r.push_back(it->second);
     }

@@ -14,11 +14,13 @@
 #include <sqlite3.h>
 
 #include "PinyinSequence.h"
+#include "LuaBinding.h"
 
 #define PINYIN_DB_ID_MAX 15
 
 using std::string;
 using std::multimap;
+using std::map;
 using std::greater;
 using std::pair;
 
@@ -28,7 +30,7 @@ typedef multimap<double, string, greater<double> > CandidateList;
 class PinyinDatabase {
 public:
     PinyinDatabase(const string dbPath, const double weight = 1.0);
-    
+
     /**
      * query pinyin database
      * @param pinyins space seperated pinyin sequence, e.g. "wo men kan dao le"
@@ -41,7 +43,7 @@ public:
 
     string greedyConvert(const string& pinyins, const double longPhraseAdjust = 4, int limitLength = PINYIN_DB_ID_MAX);
     string greedyConvert(const PinyinSequence& pinyins, const double longPhraseAdjust = 4, int limitLength = PINYIN_DB_ID_MAX);
-    
+
     const bool isDatabaseOpened() const;
 
     virtual ~PinyinDatabase();
@@ -56,12 +58,22 @@ public:
      */
     static void getPinyinIDs(const string pinyin, int& consonantId, int& vowelId);
     static string getPinyinFromID(int consonantId, int vowelId);
+    static void registerLuaFunctions();
+
+    static void staticInit();
+    static void staticDestruct();
+
+    static const map<string, PinyinDatabase*>& getPinyinDatabases();
+
 private:
+    static map<string, PinyinDatabase*> pinyinDatabases;
+    static int l_getPhraseDatabaseLoadedCount(lua_State* L);
+    static int l_loadPhraseDatabase(lua_State* L);
+
     PinyinDatabase(const PinyinDatabase& orig);
     sqlite3 *db;
     double weight;
 };
-
 
 // from ibus-pinyin 1.2.99.20100212/src/Types.h, partical
 namespace PinyinDefines {

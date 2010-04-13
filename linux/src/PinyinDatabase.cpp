@@ -13,12 +13,15 @@
 #include "defines.h"
 #include "PinyinSequence.h"
 #include "Configuration.h"
+#include "PinyinCloudClient.h"
 
 #define DB_CACHE_SIZE "16384"
 #define DB_PREFETCH_LEN 6 
 
 using std::istringstream;
 using std::ostringstream;
+
+map<string, PinyinDatabase*> PinyinDatabase::pinyinDatabases;
 
 PinyinDatabase::PinyinDatabase(const string dbPath, const double weight) {
     DEBUG_PRINT(1, "[PYDB] PinyinDatabase(%s, %.2lf)\n", dbPath.c_str(), weight);
@@ -512,3 +515,66 @@ void PinyinDatabase::getPinyinIDs(const string pinyin, int& consonantId, int& vo
     }
 }
 
+// Lua C functions
+
+/**
+ * get database loaded count
+ * in: -
+ * out: int
+ */
+int PinyinDatabase::l_getPhraseDatabaseLoadedCount(lua_State* L) {
+    DEBUG_PRINT(3, "[LUABIND] l_getPhraseDatabaseLoadedCount\n");
+    lua_checkstack(L, 1);
+    lua_pushinteger(L, PinyinDatabase::pinyinDatabases.size());
+    return 1;
+}
+
+/**
+ * load pinyin database (ibus-pinyin 1.2.99 compatible)
+ * in: string, double
+ * out: int
+ */
+int PinyinDatabase::l_loadPhraseDatabase(lua_State* L) {
+    DEBUG_PRINT(3, "[LUABIND] l_loadPhraseDatabase\n");
+    luaL_checktype(L, 1, LUA_TSTRING);
+    lua_checkstack(L, 1);
+
+    string dbPath = lua_tostring(L, 1);
+    double weight = 1;
+    int r = 0;
+
+    if (lua_type(L, 2) == LUA_TNUMBER) weight = lua_tonumber(L, 2);
+    if (PinyinDatabase::pinyinDatabases.find(dbPath) == PinyinDatabase::pinyinDatabases.end()) {
+        PinyinDatabase *pydb = new PinyinDatabase(dbPath, weight);
+        if (pydb->isDatabaseOpened()) {
+            r = 1;
+            PinyinDatabase::pinyinDatabases.insert(pair<string, PinyinDatabase*>(dbPath, pydb));
+        } else delete pydb;
+    }
+
+    lua_pushinteger(L, r);
+    return 1;
+}
+
+void PinyinDatabase::registerLuaFunctions() {
+    LuaBinding::getStaticBinding().registerFunction(l_loadPhraseDatabase, "load_database");
+    LuaBinding::getStaticBinding().registerFunction(l_getPhraseDatabaseLoadedCount, "database_count");
+}
+
+void PinyinDatabase::staticDestruct() {
+    // close dbs
+    for (map<string, PinyinDatabase*>::iterator it = pinyinDatabases.begin(); it != pinyinDatabases.end(); ++it) {
+        if (it->second) {
+            delete it->second;
+            it->second = NULL;
+        }
+    }
+}
+
+void PinyinDatabase::staticInit() {
+
+}
+
+const map<string, PinyinDatabase*>& PinyinDatabase::getPinyinDatabases() {
+    return pinyinDatabases;
+}

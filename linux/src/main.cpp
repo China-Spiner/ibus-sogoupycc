@@ -22,6 +22,8 @@
 #include "LuaBinding.h"
 #include "XUtility.h"
 #include "Configuration.h"
+#include "PinyinDatabase.h"
+#include "DoublePinyinScheme.h"
 
 static IBusBus *bus = NULL; // Connect with IBus daemon.
 static IBusFactory *factory = NULL;
@@ -69,11 +71,10 @@ static void ibusRegister(bool callByIbus) {
 }
 
 void* staticInitThreadFunc(void*) {
-    DEBUG_PRINT(1, "[MAIN] staticInitThreadFunc\n");
     // static selection clipboard monitor
     XUtility::staticInit();
 
-    DEBUG_PRINT(1, "[MAIN] staticInitThreadFunc: load config.lua\n");
+    DEBUG_PRINT(1, "[MAIN] staticInitThreadFunc: start to load config.lua\n");
     // load global config (may contain dict loading and online update checking)
     LuaBinding::loadStaticConfigure();
     return NULL;
@@ -107,16 +108,30 @@ int main(int argc, char *argv[]) {
     gdk_init(&argc, &argv);
     gtk_init(&argc, &argv);
 
-    // global configuration init, be first
-    PinyinCloudClient::staticInit();
+    // global luaBinding construct, be first
     LuaBinding::staticInit();
+
+    // other classes may add functions to LuaBinding::getStaticBinding()
+    registerDebugLuaFunction();
+
+    ImeEngine::registerLuaFunctions();
+    Configuration::registerLuaFunctions();
+    XUtility::registerLuaFunctions();
+    DoublePinyinScheme::registerLuaFunctions();
+    PinyinDatabase::registerLuaFunctions();
+    PinyinUtility::registerLuaFunctions();
+
+
+    // static inits
     Configuration::staticInit();
+    PinyinCloudClient::staticInit();
     PinyinUtility::staticInit();
+    PinyinDatabase::staticInit();
 
     // simple argc parser
     ibusRegister(argc > 1 && strstr(argv[1], "-i"));
 
-    // other static init in background, prevent user from feeling delay
+    // other static init(ie, read settings) in background, prevent user from feeling delay
     pthread_t staticInitThread;
     pthread_attr_t threadAttr;
     pthread_attr_init(&threadAttr);
@@ -128,7 +143,8 @@ int main(int argc, char *argv[]) {
     pthread_attr_destroy(&threadAttr);
 
     DEBUG_PRINT(1, "[MAIN] Reaching ibus_main() ...\n");
-    // wait static config be loaded 0.1 s should be ok.
+
+    // wait static config be applied, 0.1 s should be ok.
     usleep(100000);
     ibus_main();
 
@@ -136,9 +152,12 @@ int main(int argc, char *argv[]) {
 
     // clean up static vars
     XUtility::staticDestruct();
-    LuaBinding::staticDestruct();
     Configuration::staticDestruct();
     PinyinCloudClient::staticDestruct();
+    PinyinDatabase::staticDestruct();
+    PinyinUtility::staticDestruct();
+
+    LuaBinding::staticDestruct();
 
     return 0;
 }

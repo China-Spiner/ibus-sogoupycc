@@ -15,10 +15,9 @@
 
 GType ibusSgpyccEngineGetType(void);
 
-namespace Engine {
+namespace ImeEngine {
     // lua C functions
-    extern int l_commitText(lua_State* L);
-    extern int l_sendRequest(lua_State* L);
+    extern void registerLuaFunctions();
 }
 
 #endif  /* _ENGINE_H */

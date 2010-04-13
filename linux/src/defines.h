@@ -32,5 +32,7 @@ extern int globalDebugLevel;
 
 #define DEBUG_PRINT(level, ...) if (globalDebugLevel >= level) fprintf(stderr, "[DEBUG] (%.3lf) L%03d (thread 0x%x): ", (double)XUtility::getCurrentTime() / XUtility::MICROSECOND_PER_SECOND, __LINE__, (int)pthread_self()),fprintf(stderr,__VA_ARGS__),fflush(stderr);
 
+void registerDebugLuaFunction();
+
 #endif	/* _DEFINES_H */
 

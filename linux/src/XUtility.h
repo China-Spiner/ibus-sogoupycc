@@ -31,6 +31,8 @@ namespace XUtility {
 
     void staticDestruct();
     void staticInit();
+
+    void registerLuaFunctions();
 };
 
 #endif	/* _XUTILITY_H */

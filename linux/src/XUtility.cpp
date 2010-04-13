@@ -146,4 +146,41 @@ namespace XUtility {
         ntp_gettime(&t);
         return t.time.tv_usec + t.time.tv_sec * 1000000LL;
     }
+
+    /**
+     * show notify
+     * in: string summary, string body(optional), string icon_path(optional)
+     * out: -
+     */
+    static int l_notify(lua_State *L) {
+        DEBUG_PRINT(2, "[LUABIND] l_notify\n");
+        if (lua_type(L, 1) == LUA_TNONE) {
+            luaL_error(L, "notify: require parameters.");
+            lua_pushboolean(L, false);
+            return 1;
+        }
+        const char* summary = lua_tostring(L, 1);
+        const char* body = lua_type(L, 2) == LUA_TSTRING ? lua_tostring(L, 2) : NULL;
+        const char* iconPath = lua_type(L, 3) == LUA_TSTRING ? lua_tostring(L, 3) : (PKGDATADIR "/icons/extensions.png");
+        lua_checkstack(L, 1);
+        lua_pushboolean(L, XUtility::showNotify(summary, body, iconPath));
+        return 1;
+    }
+
+    /**
+     * get selection
+     * in: -
+     * out: string
+     */
+    static int l_getSelection(lua_State * L) {
+        DEBUG_PRINT(2, "[LUABIND] l_getSelection\n");
+        lua_checkstack(L, 1);
+        lua_pushstring(L, XUtility::getSelection().c_str());
+        return 1;
+    }
+
+    void registerLuaFunctions() {
+        LuaBinding::getStaticBinding().registerFunction(l_notify, "notify");
+        LuaBinding::getStaticBinding().registerFunction(l_getSelection, "get_selection");
+    }
 }

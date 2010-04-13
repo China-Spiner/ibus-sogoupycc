@@ -11,13 +11,14 @@
 #include <set>
 #include <string>
 #include <ibus.h>
-
+#include <vector>
 #include "LuaBinding.h"
 
 #define WEAK_CACHE_PREFIX "._."
 
 using std::string;
 using std::set;
+using std::vector;
 
 #define INVALID_COLOR -1
 
@@ -111,7 +112,7 @@ namespace Configuration {
     extern int internalCandicateColor;
 
     // keys
-    extern ImeKey startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey, quickResponseKey;
+    extern ImeKey startCorrectionKey, engModeKey, chsModeKey, pageDownKey, pageUpKey, quickResponseKey, submitRawKey;
 
     // boolean configs
     extern bool useDoublePinyin;
@@ -152,6 +153,7 @@ namespace Configuration {
     // functions (callby LuaBinding, main, engine, database)
     void addConstantsToLua(LuaBinding& luaBinding);
     void staticInit();
+    void registerLuaFunctions();
     void staticDestruct();
     void activeExtension(string label);
     bool activeExtension(unsigned keyval, unsigned keymask);
@@ -160,12 +162,10 @@ namespace Configuration {
     const string getFullPinyinTailAdjusted(const string& fullPinyinString);
     void writeGlobalCache(const string& requsetSring, const string& content, const bool weak = false);
 
-
     // lua C functions
     /**
      * in: (key = I..., mod = key.SHIFT_MASK, label = "blabla", script = "functionName")
      */
-    extern int l_registerCommand(lua_State *L);
 };
 
 

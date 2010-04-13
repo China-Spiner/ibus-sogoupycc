@@ -46,6 +46,8 @@ public:
     static const int VALID_PINYIN_MAX_LENGTH;
 
     static void staticInit();
+    static void staticDestruct();
+    static void registerLuaFunctions();
 private:
     PinyinUtility(const PinyinUtility& orig);
 
