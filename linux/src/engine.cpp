@@ -884,7 +884,7 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName
             statisticsBuffer << "现在还没有数据\n";
         } else {
             statisticsBuffer << "已发送请求: " << totalRequestCount << " 个\n失败的请求: " << totalFailedRequestCount << " 个\n";
-            statisticsBuffer << "已发送预请求: " << totalRequestCount << " 个\n失败的预请求: " << totalFailedRequestCount << " 个\n";
+            statisticsBuffer << "已发送预请求: " << totalPreRequestCount << " 个\n失败的预请求: " << totalFailedPreRequestCount << " 个\n";
             if (totalRequestCount + totalPreRequestCount - totalFailedRequestCount - totalFailedRequestCount > 0) {
                 statisticsBuffer << std::fixed << std::setprecision(3);
                 statisticsBuffer << "成功请求的平均响应时间: " << totalResponseTime / (totalRequestCount + totalPreRequestCount - totalFailedRequestCount - totalFailedRequestCount) << " 秒\n最慢响应时间: " << maximumResponseTime << " 秒\n";
