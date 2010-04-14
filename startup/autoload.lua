@@ -1,4 +1,4 @@
-local current_version = "0.2.4"
+local current_version = "0.2.5"
 local note_path = os.getenv('HOME')..'/.notes.txt'
 
 function google_translate(text, langpair)
