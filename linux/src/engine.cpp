@@ -1548,6 +1548,7 @@ static string preFetcher(void* data, const string& requestString) {
             }
         }
 
+        totalPreRequestCount++;
         if (res.empty()) {
             totalFailedPreRequestCount++;
             res = getRequestCache(engine, requestString, true);
@@ -1564,8 +1565,6 @@ static string preFetcher(void* data, const string& requestString) {
             }
         } else {
             // success, update statistics
-            totalPreRequestCount++;
-
             if (Configuration::writeRequestCache && requestString != res) writeRequestCache(engine, requestString, res);
             engine->cloudClient->updateRequestInAdvance(requestString, res);
         }
@@ -1591,7 +1590,6 @@ static string luaFetcher(void* voidData, const string & requestString) {
 }
 
 namespace ImeEngine {
-
     static int l_commitText(lua_State * L) {
         lua_tostring(L, 1);
         DEBUG_PRINT(1, "[ENGINE] l_commitText: %s\n", lua_tostring(L, 1));

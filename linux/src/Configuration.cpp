@@ -66,7 +66,7 @@ namespace Configuration {
     int preeditReservedPinyinCount = 0;
 
     // pre request timeout
-    double preRequestTimeout = 0.8;
+    double preRequestTimeout = 0.6;
     double requestTimeout = 12.;
 
     // selection timeout tolerance
