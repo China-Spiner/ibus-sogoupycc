@@ -1080,8 +1080,11 @@ static const string getPartialCacheConvert(IBusSgpyccEngine* engine, const strin
 static const string getGreedyLocalCovert(IBusSgpyccEngine* engine, const string& pinyins) {
     string remainingPinyins, partialConvertedCharacters;
     partialConvertedCharacters = getPartialCacheConvert(engine, pinyins, &remainingPinyins);
-    return PinyinDatabase::getPinyinDatabases().begin()->second->
+    if (PinyinDatabase::getPinyinDatabases().size() > 0)
+        return PinyinDatabase::getPinyinDatabases().begin()->second->
             greedyConvert(pinyins, Configuration::dbCompleteLongPhraseAdjust);
+    else
+        return pinyins;
 }
 
 static const vector<string> queryCloudMemoryDatabase(const string& pinyins) {
@@ -1263,7 +1266,6 @@ static void writeRequestCache(IBusSgpyccEngine* engine, const string& requsetSri
     if (weak) {
         engine->luaBinding->setValue(requsetSring.c_str(), (string(WEAK_CACHE_PREFIX) + content).c_str(), "request_cache");
     } else {
-
         engine->luaBinding->setValue(requsetSring.c_str(), content.c_str(), "request_cache");
     }
 }
@@ -1503,7 +1505,6 @@ string externalFetcher(void* data, const string & requestString) {
             }
         } else {
             if (Configuration::writeRequestCache && requestString != res) {
-
                 writeRequestCache(engine, requestString, res);
             }
         }
@@ -1557,7 +1558,7 @@ static string preFetcher(void* data, const string& requestString) {
             totalFailedPreRequestCount++;
             res = getRequestCache(engine, requestString, true);
             if (res.empty()) {
-                if (Configuration::preRequestFallback) {
+                if (Configuration::preRequestFallback && PinyinDatabase::getPinyinDatabases().size() > 0) {
                     // weak cache greedy result
                     res = getGreedyLocalCovert(engine, requestString);
                     // write weak

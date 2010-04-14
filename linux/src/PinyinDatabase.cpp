@@ -183,7 +183,7 @@ string PinyinDatabase::greedyConvert(const string& pinyins, const double longPhr
 string PinyinDatabase::greedyConvert(const PinyinSequence& pinyins, const double longPhraseAdjust, int lengthLimit) {
     DEBUG_PRINT(3, "[PYDB] greedyConvert: %s\n", pinyins.toString().c_str());
 
-    string r;
+    string r = "";
     if (!db) return r;
 
     if (sqlite3_threadsafe()) {
