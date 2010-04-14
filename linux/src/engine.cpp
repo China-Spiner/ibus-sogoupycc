@@ -8,6 +8,7 @@
 #include <string.h>
 #include <string>
 #include <sstream>
+#include <iomanip>
 #include <cassert>
 #include <vector>
 #include <dirent.h>
@@ -878,19 +879,22 @@ static void enginePropertyActive(IBusSgpyccEngine *engine, const gchar *propName
         engineUpdateProperties(engine);
     } else if (strcmp(propName, "requestingIndicator") == 0) {
         // show avg response time ... info
-        char statisticsBuffer[1024];
-        if (totalRequestCount == 0) {
-            snprintf(statisticsBuffer, sizeof (statisticsBuffer), "现在还没有数据\n");
+        ostringstream statisticsBuffer;
+        if (totalRequestCount + totalPreRequestCount == 0) {
+            statisticsBuffer << "现在还没有数据\n";
         } else {
-            snprintf(statisticsBuffer, sizeof (statisticsBuffer),
-                    "已发送请求: %d 个\n失败或超时的请求: %d 个\n平均响应时间: %.3lf 秒\n最慢响应时间: %.3lf 秒\n已发送预请求: %d 个\n失败或超时的预请求: %d 个",
-                    totalRequestCount, totalFailedRequestCount, totalResponseTime / totalRequestCount, maximumResponseTime, totalPreRequestCount, totalFailedPreRequestCount);
+            statisticsBuffer << "已发送请求: " << totalRequestCount << " 个\n失败的请求: " << totalFailedRequestCount << " 个\n";
+            statisticsBuffer << "已发送预请求: " << totalRequestCount << " 个\n失败的预请求: " << totalFailedRequestCount << " 个\n";
+            if (totalRequestCount + totalPreRequestCount - totalFailedRequestCount - totalFailedRequestCount > 0) {
+                statisticsBuffer << std::fixed << std::setprecision(3);
+                statisticsBuffer << "成功请求的平均响应时间: " << totalResponseTime / (totalRequestCount + totalPreRequestCount - totalFailedRequestCount - totalFailedRequestCount) << " 秒\n最慢响应时间: " << maximumResponseTime << " 秒\n";
+            }
         }
         if (Configuration::showNotification) {
-            XUtility::showNotify("统计数据", statisticsBuffer);
+            XUtility::showNotify("统计数据", statisticsBuffer.str().c_str());
         } else {
             engine->cloudClient->request("\n==== 统计数据 ====\n", directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
-            engine->cloudClient->request(statisticsBuffer, directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+            engine->cloudClient->request(statisticsBuffer.str().c_str(), directFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
         }
     } else if (propName[0] == '.') {
         // extension action
