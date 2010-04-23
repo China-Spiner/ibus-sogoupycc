@@ -128,10 +128,16 @@ int main(int argc, char *argv[]) {
     PinyinUtility::staticInit();
     PinyinDatabase::staticInit();
 
-    // simple argc parser
+    /*GdkCursor* gc = gdk_cursor_new(GDK_WATCH);
+    gdk_window_set_cursor(gdk_screen_get_active_window(gdk_display_get_default_screen(gdk_display_get_default())), gc);
+    gdk_cursor_unref(gc);
+    sleep(10);
+    return 0;*/
+    
+    // register ime
     ibusRegister(argc > 1 && strstr(argv[1], "-i"));
 
-    // other static init(ie, read settings) in background, prevent user from feeling delay
+    // other init(ie, read settings) in background, prevent user from feeling delay
     pthread_t staticInitThread;
     pthread_attr_t threadAttr;
     pthread_attr_init(&threadAttr);

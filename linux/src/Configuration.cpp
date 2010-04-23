@@ -495,9 +495,10 @@ namespace Configuration {
                 case LUA_TSTRING:
                 {
                     tableLabelKeys.clear();
-                    string tableLabelKeys = lb.getValue("label_keys", "");
-                    for (size_t i = 0; i < tableLabelKeys.length(); i++) {
-                        tableLabelKeys.push_back(tableLabelKeys.c_str()[i]);
+                    string tableLabelKeysStr = lb.getValue("label_keys", "");
+                    
+                    for (size_t i = 0; i < tableLabelKeysStr.length(); i++) {
+                        tableLabelKeys.push_back(tableLabelKeysStr.c_str()[i]);
                     }
                     break;
                 }
