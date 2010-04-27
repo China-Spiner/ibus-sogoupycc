@@ -922,7 +922,7 @@ static void engineUpdateProperties(IBusSgpyccEngine * engine) {
 }
 
 static void engineFocusIn(IBusSgpyccEngine* engine) {
-    DEBUG_PRINT(2, "[ENGINE] FocusIn\n");
+    DEBUG_PRINT(2, "[ENGINE] Event: FocusIn\n");
     engine->hasFocus = true;
     Configuration::activeEngine = (typeof (Configuration::activeEngine))engine;
     engineUpdateProperties(engine);
@@ -930,13 +930,13 @@ static void engineFocusIn(IBusSgpyccEngine* engine) {
 }
 
 static void engineFocusOut(IBusSgpyccEngine * engine) {
-    DEBUG_PRINT(2, "[ENGINE] FocusOut\n");
+    DEBUG_PRINT(2, "[ENGINE] Event: FocusOut\n");
     engine->hasFocus = false;
     Configuration::activeEngine = NULL;
 }
 
 static void engineReset(IBusSgpyccEngine * engine) {
-    DEBUG_PRINT(1, "[ENGINE] Reset\n");
+    DEBUG_PRINT(1, "[ENGINE] Event: Reset\n");
     // engine->cloudClient->removeFirstRequest(INT_MAX);
     // engineUpdateProperties(engine);
     // engineUpdatePreedit(engine);
@@ -1003,7 +1003,7 @@ static void enginePageDown(IBusSgpyccEngine * engine) {
 }
 
 static void engineCursorUp(IBusSgpyccEngine * engine) {
-    DEBUG_PRINT(2, "[ENGINE] CursorUp\n");
+    DEBUG_PRINT(2, "[ENGINE] Event: CursorUp\n");
     if (!engine->correctings->empty()) {
         ibus_lookup_table_cursor_up(engine->table);
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
@@ -1011,7 +1011,7 @@ static void engineCursorUp(IBusSgpyccEngine * engine) {
 }
 
 static void engineCursorDown(IBusSgpyccEngine * engine) {
-    DEBUG_PRINT(2, "[ENGINE] CursorDown\n");
+    DEBUG_PRINT(2, "[ENGINE] Event: CursorDown\n");
     if (!engine->correctings->empty()) {
         ibus_lookup_table_cursor_down(engine->table);
         ibus_engine_update_lookup_table((IBusEngine*) engine, engine->table, TRUE);
@@ -1100,7 +1100,7 @@ static const vector<string> queryCloudMemoryDatabase(const string& pinyins) {
 
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     // this function need a mutex lock, it will pop first several finished requests from cloudClient
-    DEBUG_PRINT(1, "[ENGINE] Update Preedit\n");
+    DEBUG_PRINT(1, "[ENGINE] Event: Update Preedit\n");
     pthread_mutex_lock(&engine->updatePreeditMutex);
 
     engine->cloudClient->readLock();

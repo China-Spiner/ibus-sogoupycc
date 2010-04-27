@@ -83,7 +83,8 @@ void* staticInitThreadFunc(void*) {
 int main(int argc, char *argv[]) {
     // version
     if (argc > 1 && strstr(argv[1], "-v")) {
-        printf("ibus-sogoupycc version: %s\n", VERSION);
+        printf("ibus-sogoupycc %s [", VERSION);
+        printf("built for ibus %d.%d.%d]\n", IBUS_MAJOR_VERSION, IBUS_MINOR_VERSION, IBUS_MICRO_VERSION);
         exit(EXIT_SUCCESS);
     }
 
@@ -127,12 +128,6 @@ int main(int argc, char *argv[]) {
     PinyinCloudClient::staticInit();
     PinyinUtility::staticInit();
     PinyinDatabase::staticInit();
-
-    /*GdkCursor* gc = gdk_cursor_new(GDK_WATCH);
-    gdk_window_set_cursor(gdk_screen_get_active_window(gdk_display_get_default_screen(gdk_display_get_default())), gc);
-    gdk_cursor_unref(gc);
-    sleep(10);
-    return 0;*/
     
     // register ime
     ibusRegister(argc > 1 && strstr(argv[1], "-i"));
