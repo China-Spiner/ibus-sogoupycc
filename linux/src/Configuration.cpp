@@ -267,7 +267,7 @@ namespace Configuration {
         punctuationMap.setPunctuationPair(')', FullPunctuation("）"));
         punctuationMap.setPunctuationPair('{', FullPunctuation("｛"));
         punctuationMap.setPunctuationPair('}', FullPunctuation("｝"));
-        punctuationMap.setPunctuationPair(']', FullPunctuation("［"));
+        punctuationMap.setPunctuationPair('[', FullPunctuation("［"));
         punctuationMap.setPunctuationPair(']', FullPunctuation("］"));
         punctuationMap.setPunctuationPair(';', FullPunctuation("；"));
         punctuationMap.setPunctuationPair(':', FullPunctuation("："));
