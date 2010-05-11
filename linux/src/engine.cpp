@@ -213,6 +213,26 @@ static void engineClassInit(IBusSgpyccEngineClass *klass) {
     // LuaBinding::getStaticBinding().addFunction(l_sendRequest, "request");
 }
 
+static void engineCommitAll(IBusSgpyccEngine *engine) {
+    string requestsResult;
+    std::vector<PinyinCloudRequest> requests = engine->cloudClient->exportAndRemoveAllRequest();
+    for (std::vector<PinyinCloudRequest>::iterator it = requests.begin(); it != requests.end(); ++it) {
+        if (it->responsed && !it->responseString.empty()) {
+            requestsResult += it->responseString;
+        } else {
+            requestsResult += getGreedyLocalCovert(engine, it->requestString);
+        }
+    }
+    // convert preedit as well
+    if (!engine->activePreedit->empty()) {
+        engine->cloudClient->request(*engine->activePreedit, externalFetcher, (void*) engine, (ResponseCallbackFunc) engineUpdatePreedit, (void*) engine);
+        *engine->preedit = "";
+        *engine->activePreedit = "";
+    }
+    engineCommitText(engine, requestsResult);
+    engine->lastInputIsChinese = true;
+}
+
 static void engineInit(IBusSgpyccEngine *engine) {
     DEBUG_PRINT(1, "[ENGINE] engineInit\n");
 
@@ -367,7 +387,7 @@ static gboolean engineProcessKeyEvent(IBusSgpyccEngine *engine, guint32 keyval, 
         return TRUE;
     }
 
-    pthread_mutex_lock(&engine->processKeyMutex);
+    // pthread_mutex_lock(&engine->processKeyMutex);
     gboolean res = FALSE;
 engineProcessKeyEventStart:
 
@@ -642,17 +662,7 @@ engineProcessKeyEventStart:
             // check force commit all key first (not including current preedit)
             if (requestCount > 0 && Configuration::quickResponseKey.match(keyval)) {
                 // force convert all requests right now
-                string requestsResult;
-                std::vector<PinyinCloudRequest> requests = engine->cloudClient->exportAndRemoveAllRequest();
-                for (std::vector<PinyinCloudRequest>::iterator it = requests.begin(); it != requests.end(); ++it) {
-                    if (it->responsed && !it->responseString.empty()) {
-                        requestsResult += it->responseString;
-                    } else {
-                        requestsResult += getGreedyLocalCovert(engine, it->requestString);
-                    }
-                }
-                engineCommitText(engine, requestsResult);
-                engine->lastInputIsChinese = true;
+                engineCommitAll(engine);
                 res = TRUE;
                 break;
             }
@@ -863,7 +873,7 @@ engineProcessKeyEventStart:
             break;
         } // while (res == 0)
     }
-    pthread_mutex_unlock(&engine->processKeyMutex);
+    // pthread_mutex_unlock(&engine->processKeyMutex);
 
     // update preedit
     if (res) engineUpdatePreedit(engine);
@@ -931,12 +941,14 @@ static void engineFocusIn(IBusSgpyccEngine* engine) {
 
 static void engineFocusOut(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(2, "[ENGINE] Event: FocusOut\n");
+    engineCommitAll(engine);
     engine->hasFocus = false;
     Configuration::activeEngine = NULL;
 }
 
 static void engineReset(IBusSgpyccEngine * engine) {
     DEBUG_PRINT(1, "[ENGINE] Event: Reset\n");
+    engineCommitAll(engine);
     // engine->cloudClient->removeFirstRequest(INT_MAX);
     // engineUpdateProperties(engine);
     // engineUpdatePreedit(engine);
@@ -1101,7 +1113,7 @@ static const vector<string> queryCloudMemoryDatabase(const string& pinyins) {
 static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
     // this function need a mutex lock, it will pop first several finished requests from cloudClient
     DEBUG_PRINT(1, "[ENGINE] Event: Update Preedit\n");
-    pthread_mutex_lock(&engine->updatePreeditMutex);
+    // pthread_mutex_lock(&engine->updatePreeditMutex);
 
     engine->cloudClient->readLock();
     size_t requestCount = engine->cloudClient->getRequestCount();
@@ -1246,7 +1258,7 @@ static void engineUpdatePreedit(IBusSgpyccEngine * engine) {
         engineUpdateProperties(engine);
     }
 
-    pthread_mutex_unlock(&engine->updatePreeditMutex);
+    // pthread_mutex_unlock(&engine->updatePreeditMutex);
 }
 
 // request cache read and write
